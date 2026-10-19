@@ -29,7 +29,7 @@ CTRL_W = 280      # … and every control starts here, all the same width
 
 class _Page(QWidget):
     """One Options tab: labels right-aligned to a shared centre line, controls left-aligned from it,
-    sections separated by a centred heading and a hairline."""
+    sections separated by a hairline and a heading at the left edge."""
 
     def __init__(self):
         super().__init__()
@@ -59,8 +59,7 @@ class _Page(QWidget):
         self._sections += 1
         h = QLabel(text)
         h.setObjectName("OptHeading")
-        h.setAlignment(Qt.AlignHCenter)
-        self.g.addWidget(h, self._next(), 1, 1, 2)
+        self.g.addWidget(h, self._next(), 0, 1, 4, Qt.AlignLeft)   # section titles sit at the left edge
 
     def row(self, label, *controls, fixed=True):
         r = self._next()
