@@ -380,6 +380,9 @@ class InfoPanel(QScrollArea):
         self.desc.show()
         self.caption.setText(r["caption"] or "")
         self.tags.setText(", ".join(k for k in (r["keywords"] or "").split(",") if k))
+        for e in (self.caption, self.tags):     # show the start of long text, not the end
+            if not e.hasFocus():
+                e.setCursorPosition(0)
 
         self.details.show()
         if r["width"]:

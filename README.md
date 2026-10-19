@@ -45,6 +45,17 @@ no library to set up first. Zoom with the scroll wheel, star or rotate as you go
 <img src="docs/viewer.jpg" alt="Fotohaus photo viewer open over the desktop, with a filmstrip of the folder and a control bar" width="100%">
 </div>
 
+## On this day
+
+Each day Fotohaus looks back through your library for pictures taken on today's date in
+earlier years, and gathers them into **Memories**: "2 years ago", "3 years ago", ready to play as a
+slideshow. Each photo also knows where it was taken ("Lauterbrunnen, Bern, Switzerland"), worked out
+on your Mac from a built-in atlas, so you can simply search for a town.
+
+<div align="center">
+<img src="docs/memories.jpg" alt="Fotohaus Memories: photos from this day two, three and four years ago, with the place shown in the info panel" width="100%">
+</div>
+
 ## What it does
 
 <table>
