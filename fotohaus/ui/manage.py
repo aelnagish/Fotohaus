@@ -95,9 +95,15 @@ class _Page(QWidget):
         self.g.setRowStretch(self._r, 1)
 
     def set_control_width(self, w: int) -> None:
+        """Give every control the same *visible* width. On the Mac, drop-downs are drawn inset from
+        their frame while plain containers are not, so add that inset back to keep the edges in line."""
+        from PySide6.QtWidgets import QWidgetItem
         self.g.setColumnMinimumWidth(2, w)
         for c in self.sized:
             c.setFixedWidth(w)
+            extra = w - QWidgetItem(c).sizeHint().width()     # style margins around the visible control
+            if extra > 0:
+                c.setFixedWidth(w + extra)
 
     def indent_headings(self, longest: int) -> None:
         """Start the section titles a couple of letters left of the longest label (shared by all tabs)."""
