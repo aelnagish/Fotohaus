@@ -6,3 +6,4 @@ dist/
 *.dmg
 .DS_Store
 fotohaus/models/clip*/
+_to_delete/
