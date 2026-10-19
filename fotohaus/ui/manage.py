@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFileDialog, QFileSystemModel, QFormLayout, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-                               QFrame, QRadioButton, QSpinBox, QTabWidget, QToolButton, QTreeView, QVBoxLayout, QWidget)
+                               QFrame, QRadioButton, QSizePolicy, QSpinBox, QTabWidget, QToolButton, QTreeView, QVBoxLayout, QWidget)
 
 from .. import macos, media
 from ..ai import clip, faces, vision_mac
@@ -46,6 +46,7 @@ class _Page(QWidget):
         self._sections = 0
         self.labels: list[QLabel] = []
         self.headings: list[QLabel] = []
+        self.sized: list[QWidget] = []     # controls that take the shared control width
 
     def _next(self):
         r = self._r
@@ -74,8 +75,9 @@ class _Page(QWidget):
         self.labels.append(lab)
         if len(controls) == 1:
             c = controls[0]
-            if fixed and isinstance(c, (QComboBox, QSpinBox, QLineEdit)):
+            if fixed and (isinstance(c, (QComboBox, QSpinBox, QLineEdit)) or c.property("full_width")):
                 c.setFixedWidth(CTRL_W)
+                self.sized.append(c)
             self.g.addWidget(c, r, 2, Qt.AlignLeft | Qt.AlignVCenter)
         else:
             self.g.addWidget(_hrow(*controls), r, 2, Qt.AlignLeft | Qt.AlignVCenter)
@@ -92,6 +94,11 @@ class _Page(QWidget):
     def finish(self):
         self.g.setRowStretch(self._r, 1)
 
+    def set_control_width(self, w: int) -> None:
+        self.g.setColumnMinimumWidth(2, w)
+        for c in self.sized:
+            c.setFixedWidth(w)
+
     def indent_headings(self, longest: int) -> None:
         """Start the section titles a couple of letters left of the longest label (shared by all tabs)."""
         lead = 2 * self.fontMetrics().averageCharWidth()
@@ -107,6 +114,19 @@ def _hrow(*widgets):
     for x in widgets:
         h.addWidget(x)
     h.addStretch()
+    return w
+
+
+def _halves(left, right):
+    """A control-width row split into two equal halves (a button or label in each)."""
+    w = QWidget()
+    w.setProperty("full_width", True)
+    h = QHBoxLayout(w)
+    h.setContentsMargins(0, 0, 0, 0)
+    h.setSpacing(8)
+    for x in (left, right):
+        x.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        h.addWidget(x, 1)
     return w
 
 
@@ -162,17 +182,13 @@ class OptionsDialog(QDialog):
         sc.clicked.connect(self.rescan)
         mv = QPushButton("Move…")
         mv.clicked.connect(self._move_db)
-        # three equal buttons: Folder Manager | Rescan Now on one row, Move… under Rescan Now
-        bw = max((CTRL_W - 8) // 2, *(b_.sizeHint().width() for b_ in (fm, sc, mv)))
-        for b_ in (fm, sc, mv):
-            b_.setFixedWidth(bw)
-        g.row("Watched folders:", fm, sc)
-        path = QLabel()
-        path.setObjectName("Muted")
-        path.setToolTip(str(DATA_DIR))
-        path.setText(path.fontMetrics().elidedText(str(DATA_DIR).replace(str(Path.home()), "~"), Qt.ElideMiddle, bw))
-        path.setFixedWidth(bw)
-        g.row("Database:", path, mv)
+        self._btn_need = 2 * max(b_.sizeHint().width() for b_ in (fm, sc, mv)) + 8
+        # two equal halves that span exactly the width of the drop-downs above
+        g.row("Watched folders:", _halves(fm, sc))
+        self._db_path = QLabel()
+        self._db_path.setObjectName("Muted")
+        self._db_path.setToolTip(str(DATA_DIR))
+        g.row("Database:", _halves(self._db_path, mv))
         g.heading("Places")
         self.tiles = QCheckBox("Load OpenStreetMap tiles")
         self.tiles.setChecked(bool(s.get("map_tiles")))
@@ -332,8 +348,13 @@ class OptionsDialog(QDialog):
         v.addWidget(bb)
         pages = [tabs.widget(i) for i in range(tabs.count()) if isinstance(tabs.widget(i), _Page)]
         longest = max((lab.sizeHint().width() for pg in pages for lab in pg.labels), default=0)
+        ctrl_w = max(CTRL_W, self._btn_need)
         for pg in pages:
             pg.indent_headings(longest)
+            pg.set_control_width(ctrl_w)
+        half = (ctrl_w - 8) // 2
+        self._db_path.setText(self._db_path.fontMetrics().elidedText(
+            str(DATA_DIR).replace(str(Path.home()), "~"), Qt.ElideMiddle, half))
         # wide enough that every tab name fits on one row
         need = bar.sizeHint().width() + 48
         self.setMinimumWidth(need)
