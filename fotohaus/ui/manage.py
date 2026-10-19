@@ -1,20 +1,19 @@
-"""Tools: Settings, Folder Manager, Import, Back Up Pictures."""
+"""Tools: Options, Folder Manager, Import, Back Up Pictures."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QDir, QIdentityProxyModel, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QDir, QIdentityProxyModel, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFileDialog, QFileSystemModel, QFormLayout, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-                               QFrame, QRadioButton, QScrollArea, QSpinBox, QSplitter, QStackedWidget, QTreeView, QVBoxLayout, QWidget)
+                               QRadioButton, QSpinBox, QSplitter, QTabWidget, QTreeView, QVBoxLayout, QWidget)
 
 from .. import macos, media
 from ..ai import clip, faces, vision_mac
 from ..paths import DATA_DIR
-from . import theme
 from .dialogs import default_pictures
 
 BUTTONS = [("share", "Share"), ("email", "Email"), ("print", "Print"), ("export", "Export"),
@@ -24,338 +23,85 @@ BUTTONS = [("share", "Share"), ("email", "Email"), ("print", "Print"), ("export"
 
 # ====================================================================== Options
 
-class Switch(QCheckBox):
-    """A macOS-style on/off switch with the QCheckBox API (isChecked / setChecked / toggled)."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(40, 22)
-
-    def sizeHint(self):
-        return QSize(40, 22)
-
-    def hitButton(self, pos):
-        return self.rect().contains(pos)
-
-    def paintEvent(self, e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        on, en = self.isChecked(), self.isEnabled()
-        track = theme.ACCENT if on else QColor("#4a4b50" if theme.is_dark() else "#d5d7db")
-        if not en:
-            track = QColor(track)
-            track.setAlpha(110)
-        p.setPen(Qt.NoPen)
-        p.setBrush(track)
-        p.drawRoundedRect(QRectF(0, 1, 40, 20), 10, 10)
-        knob = QColor("#ffffff")
-        if not en:
-            knob.setAlpha(190)
-        p.setBrush(QColor(0, 0, 0, 40))
-        x = 20.5 if on else 2.5
-        p.drawEllipse(QRectF(x, 3.5, 17, 17))
-        p.setBrush(knob)
-        p.drawEllipse(QRectF(x, 2.5, 17, 17))
-        p.end()
-
-
-def _badge(name: str, color: str) -> QIcon:
-    """Settings-style icon: a white glyph on a coloured rounded square."""
-    ic = QIcon()
-    for size in (28, 56):
-        pm = QPixmap(size, size)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(color))
-        p.drawRoundedRect(QRectF(0, 0, size, size), size * 0.24, size * 0.24)
-        g = theme.icon(name, QColor("white")).pixmap(int(size * 0.7), int(size * 0.7))
-        g.setDevicePixelRatio(1.0)
-        off = (size - g.width()) // 2
-        p.drawPixmap(off, off, g)
-        p.end()
-        ic.addPixmap(pm)
-    return ic
-
-
-def _check_images() -> tuple[str, str]:
-    """Checkbox indicator images for list rows (stylesheets can only use image files)."""
-    import tempfile
-    d = Path(tempfile.gettempdir()) / "fotohaus-ui"
-    d.mkdir(exist_ok=True)
-    dark = theme.is_dark()
-    paths = []
-    for checked in (False, True):
-        pm = QPixmap(36, 36)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        r = QRectF(3, 3, 30, 30)
-        if checked:
-            p.setPen(Qt.NoPen)
-            p.setBrush(theme.ACCENT)
-            p.drawRoundedRect(r, 7, 7)
-            pen = QPen(QColor("white"), 4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-            p.setPen(pen)
-            p.drawPolyline([QPointF(10, 18.5), QPointF(15.5, 24), QPointF(26, 12)])
-        else:
-            p.setPen(QPen(QColor("#6a6c72" if dark else "#b9bcc3"), 2))
-            p.setBrush(QColor("#2a2b2f" if dark else "#ffffff"))
-            p.drawRoundedRect(r, 7, 7)
-        p.end()
-        f = d / f"check_{int(checked)}_{int(dark)}.png"
-        pm.save(str(f))
-        paths.append(f.as_posix())
-    return paths[0], paths[1]
-
-
-def _prefs_style() -> str:
-    off, on = _check_images()
-    dark = theme.is_dark()
-    nav_bg = "#26272b" if dark else "#f1f2f5"
-    page_bg = "#1e1f22" if dark else "#f7f8fa"
-    card = "#2a2b2f" if dark else "#ffffff"
-    border = "#3a3b40" if dark else "#e3e5ea"
-    sel = "#3a3c42" if dark else "#e0e3e9"
-    sec = "#8e9199" if dark else "#7a7e87"
-    return f"""
-    QDialog#Prefs {{ background: {page_bg}; }}
-    QListWidget#PrefsNav {{ background: {nav_bg}; border: none; border-right: 1px solid {border};
-                            padding: 14px 10px; outline: 0; font-size: 13px; }}
-    QListWidget#PrefsNav::item {{ padding: 6px 8px; margin: 1px 0; border-radius: 7px; }}
-    QListWidget#PrefsNav::item:selected {{ background: {sel}; color: palette(text); }}
-    QListWidget#PrefsNav::item:hover:!selected {{ background: {sel}; }}
-    QScrollArea#PrefsScroll, QWidget#PrefsPage {{ background: {page_bg}; border: none; }}
-    QLabel#PrefsTitle {{ font-size: 22px; font-weight: 700; }}
-    QLabel#PrefsSubtitle {{ color: {sec}; font-size: 12px; }}
-    QLabel#PrefsGroup {{ color: {sec}; font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
-                         padding: 0 4px; }}
-    QFrame#PrefsCard {{ background: {card}; border: 1px solid {border}; border-radius: 10px; }}
-    QFrame#PrefsSep {{ background: {border}; max-height: 1px; min-height: 1px; border: none; }}
-    QLabel#PrefsRowTitle {{ font-size: 13px; }}
-    QLabel#PrefsRowDesc {{ color: {sec}; font-size: 11px; }}
-    QWidget#PrefsFooter {{ background: {page_bg}; border-top: 1px solid {border}; }}
-    QListWidget#PrefsList {{ background: transparent; border: none; outline: 0; }}
-    QListWidget#PrefsList::indicator {{ width: 18px; height: 18px; }}
-    QListWidget#PrefsList::indicator:unchecked {{ image: url({off}); }}
-    QListWidget#PrefsList::indicator:checked {{ image: url({on}); }}
-    """
-
-
-class _Page(QScrollArea):
-    """One settings page: a large title, a subtitle and stacked cards of rows."""
-
-    def __init__(self, title: str, subtitle: str):
-        super().__init__()
-        self.setObjectName("PrefsScroll")
-        self.setWidgetResizable(True)
-        self.setFrameShape(QFrame.NoFrame)
-        body = QWidget()
-        body.setObjectName("PrefsPage")
-        self.v = QVBoxLayout(body)
-        self.v.setContentsMargins(28, 24, 28, 24)
-        self.v.setSpacing(6)
-        t = QLabel(title)
-        t.setObjectName("PrefsTitle")
-        self.v.addWidget(t)
-        st = QLabel(subtitle)
-        st.setObjectName("PrefsSubtitle")
-        st.setWordWrap(True)
-        self.v.addWidget(st)
-        self.v.addSpacing(10)
-        self.setWidget(body)
-        self._card = None
-
-    def group(self, heading: str = "") -> None:
-        if heading:
-            self.v.addSpacing(8)
-            h = QLabel(heading.upper())
-            h.setObjectName("PrefsGroup")
-            self.v.addWidget(h)
-        card = QFrame()
-        card.setObjectName("PrefsCard")
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 4, 16, 4)
-        lay.setSpacing(0)
-        self.v.addWidget(card)
-        self._card = lay
-
-    def row(self, title: str, desc: str = "", control=None) -> None:
-        if self._card is None:
-            self.group()
-        if self._card.count():
-            sep = QFrame()
-            sep.setObjectName("PrefsSep")
-            self._card.addWidget(sep)
-        w = QWidget()
-        h = QHBoxLayout(w)
-        h.setContentsMargins(0, 10, 0, 10)
-        h.setSpacing(16)
-        txt = QVBoxLayout()
-        txt.setSpacing(2)
-        t = QLabel(title)
-        t.setObjectName("PrefsRowTitle")
-        txt.addWidget(t)
-        if desc:
-            d = QLabel(desc)
-            d.setObjectName("PrefsRowDesc")
-            d.setWordWrap(True)
-            d.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            txt.addWidget(d)
-        h.addLayout(txt, 1)
-        if control is not None:
-            if isinstance(control, (list, tuple)):
-                box = QHBoxLayout()
-                box.setSpacing(8)
-                for c in control:
-                    box.addWidget(c)
-                h.addLayout(box)
-            else:
-                h.addWidget(control, 0, Qt.AlignVCenter)
-        self._card.addWidget(w)
-
-    def block(self, widget) -> None:
-        """A free-form widget inside the current card (grids, lists)."""
-        if self._card is None:
-            self.group()
-        if self._card.count():
-            sep = QFrame()
-            sep.setObjectName("PrefsSep")
-            self._card.addWidget(sep)
-        wrap = QWidget()
-        lay = QVBoxLayout(wrap)
-        lay.setContentsMargins(0, 10, 0, 10)
-        lay.addWidget(widget)
-        self._card.addWidget(wrap)
-
-    def note(self, text: str) -> None:
-        n = QLabel(text)
-        n.setObjectName("PrefsRowDesc")
-        n.setWordWrap(True)
-        n.setContentsMargins(4, 6, 4, 0)
-        self.v.addWidget(n)
-
-    def finish(self) -> None:
-        self.v.addStretch(1)
-
-
-def _combo(items, current) -> QComboBox:
-    c = QComboBox()
-    for label, data in items:
-        c.addItem(label, data)
-    c.setCurrentIndex(max(0, c.findData(current)))
-    c.setMinimumWidth(170)
-    return c
-
-
-def _switch(on) -> Switch:
-    s = Switch()
-    s.setChecked(bool(on))
-    return s
-
-
 class OptionsDialog(QDialog):
     rescan = Signal()
     reindex = Signal()
     download_clip = Signal()
     folder_manager = Signal()
 
-    PAGES = ["General", "File Types", "Photo Viewer", "Name Tags & Metadata", "Intelligence",
-             "Slideshow & Email", "Toolbar"]
-
     def __init__(self, lib, parent=None):
         super().__init__(parent)
         self.lib = lib
         s = lib.settings
-        self.setObjectName("Prefs")
-        self.setWindowTitle("Settings")
-        self.setStyleSheet(_prefs_style())
-        self.resize(860, 600)
-        self.setMinimumSize(760, 500)
+        self.setWindowTitle("Options")
+        v = QVBoxLayout(self)
+        tabs = QTabWidget()
+        bar = tabs.tabBar()
+        bar.setElideMode(Qt.ElideNone)      # always show the full tab names
+        bar.setUsesScrollButtons(False)
+        bar.setExpanding(False)
+        self.tabs = tabs
+        v.addWidget(tabs)
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-        body = QHBoxLayout()
-        body.setSpacing(0)
-        outer.addLayout(body, 1)
-
-        self.nav = QListWidget()
-        self.nav.setObjectName("PrefsNav")
-        self.nav.setFixedWidth(220)
-        self.nav.setIconSize(QSize(22, 22))
-        self.nav.setFocusPolicy(Qt.NoFocus)
-        self.stack = QStackedWidget()
-        body.addWidget(self.nav)
-        body.addWidget(self.stack, 1)
-        badges = [("settings", "#8e8e93"), ("folder", "#3b82f6"), ("library", "#0ea5e9"), ("tag", "#f59e0b"),
-                  ("sparkle", "#8b5cf6"), ("play", "#22c55e"), ("collage", "#14b8a6")]
-        for name, (glyph, col) in zip(self.PAGES, badges):
-            it = QListWidgetItem(_badge(glyph, col), name)
-            it.setSizeHint(QSize(190, 36))
-            self.nav.addItem(it)
-        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
-
-        # ---------------------------------------------------------- General
-        g = _Page("General", "How Fotohaus opens photos and where it keeps its library.")
-        g.group("Opening photos")
-        self.open_in = _combo([("Photo Viewer", "viewer"), ("Edit view", "editor")],
-                              "editor" if s.get("open_files_in") == "editor" else "viewer")
-        g.row("Open files from Finder in", "The Photo Viewer opens instantly over your desktop; "
-              "arrow keys move through the folder.", self.open_in)
-        self.caption = _combo([("None", "none"), ("Filename", "filename"), ("Caption", "caption"),
-                               ("Resolution", "resolution"), ("Date taken", "date"), ("Tags", "tags")],
-                              s.get("thumb_caption") or "none")
-        g.row("Thumbnail captions", "Text shown under each thumbnail in the library.", self.caption)
-        g.group("Library")
+        # --- General
+        g = QWidget()
+        f = QFormLayout(g)
+        self.open_in = QComboBox()
+        self.open_in.addItem("Photo Viewer", "viewer")
+        self.open_in.addItem("Fotohaus's Edit view", "editor")
+        self.open_in.setCurrentIndex(0 if s.get("open_files_in") != "editor" else 1)
+        f.addRow("Files opened from Finder open in", self.open_in)
+        self.caption = QComboBox()
+        for k, label in (("none", "None"), ("filename", "Filename"), ("caption", "Caption"),
+                         ("resolution", "Resolution"), ("date", "Date taken"), ("tags", "Tags")):
+            self.caption.addItem(label, k)
+        self.caption.setCurrentIndex(max(0, self.caption.findData(s.get("thumb_caption"))))
+        f.addRow("Thumbnail caption", self.caption)
+        self.tiles = QCheckBox("Load OpenStreetMap tiles in Places")
+        self.tiles.setChecked(bool(s.get("map_tiles")))
+        f.addRow("", self.tiles)
         fm = QPushButton("Folder Manager…")
         fm.clicked.connect(self.folder_manager)
-        sc = QPushButton("Rescan Now")
+        sc = QPushButton("Rescan Folders Now")
         sc.clicked.connect(self.rescan)
-        g.row("Watched folders", "Choose which folders Fotohaus scans and keeps up to date.", [fm, sc])
-        mv = QPushButton("Move…")
+        row = QHBoxLayout()
+        row.addWidget(fm)
+        row.addWidget(sc)
+        row.addStretch()
+        f.addRow("Folders", row)
+        lab = QLabel(f"Library database: {DATA_DIR}")
+        lab.setObjectName("Muted")
+        lab.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lab.setWordWrap(True)
+        f.addRow(lab)
+        mv = QPushButton("Move Database…")
         mv.clicked.connect(self._move_db)
-        g.row("Library database", str(DATA_DIR), mv)
-        g.group("Maps")
-        self.tiles = _switch(s.get("map_tiles"))
-        g.row("Show map tiles in Places", "Downloads map images from OpenStreetMap. Turn off to keep "
-              "Fotohaus completely offline.", self.tiles)
-        g.finish()
-        self.stack.addWidget(g)
+        f.addRow("", mv)
+        tabs.addTab(g, "General")
 
-        # ---------------------------------------------------------- File types
-        ft = _Page("File Types", "Fotohaus skips file types you switch off here when it scans your folders.")
+        # --- File types
+        ft = QWidget()
+        fv = QVBoxLayout(ft)
+        fv.addWidget(QLabel("Fotohaus shows these file types (unchecked types are skipped when scanning):"))
+        grid = QGridLayout()
         self.type_checks = {}
         skip = {e.lower() for e in (s.get("file_types") or [])}
-        for heading, exts in (("Photos", sorted(media.IMAGE_EXT)), ("Camera RAW", sorted(media.RAW_EXT)),
-                              ("Videos", sorted(media.VIDEO_EXT))):
-            ft.group(heading)
-            box = QWidget()
-            grid = QGridLayout(box)
-            grid.setContentsMargins(0, 0, 0, 0)
-            grid.setHorizontalSpacing(18)
-            grid.setVerticalSpacing(8)
-            for i, ext in enumerate(exts):
-                cb = QCheckBox(ext.lstrip(".").upper())
-                cb.setChecked(ext not in skip)
-                self.type_checks[ext] = cb
-                grid.addWidget(cb, i // 6, i % 6)
-            ft.block(box)
-        ft.finish()
-        self.stack.addWidget(ft)
+        exts = sorted(media.IMAGE_EXT) + sorted(media.RAW_EXT) + sorted(media.VIDEO_EXT)
+        for i, ext in enumerate(exts):
+            cb = QCheckBox(ext)
+            cb.setChecked(ext not in skip)
+            self.type_checks[ext] = cb
+            grid.addWidget(cb, i // 6, i % 6)
+        fv.addLayout(grid)
+        fv.addStretch()
+        tabs.addTab(ft, "File Types")
 
-        # ---------------------------------------------------------- Photo Viewer
-        pv = _Page("Photo Viewer", "Double-click a photo in Finder and it opens over your desktop. "
-                   "Use ← and → to browse the rest of the folder, Esc to close.")
-        pv.group("Open these files with Fotohaus")
+        # --- Photo Viewer (file associations)
+        pv = QWidget()
+        pvl = QVBoxLayout(pv)
+        pvl.addWidget(QLabel("Use Fotohaus's Photo Viewer when you double-click these files in Finder:"))
         self.viewer_checks = {}
-        box = QWidget()
-        grid2 = QGridLayout(box)
-        grid2.setContentsMargins(0, 0, 0, 0)
-        grid2.setHorizontalSpacing(18)
-        grid2.setVerticalSpacing(8)
+        grid2 = QGridLayout()
         for i, (label, uti) in enumerate(macos.VIEWER_TYPES):
             cb = QCheckBox(label)
             cur = macos.default_app_for_type(uti)
@@ -363,133 +109,124 @@ class OptionsDialog(QDialog):
             cb.setToolTip(f"Currently opens with: {os.path.basename(cur) if cur else 'unknown'}")
             self.viewer_checks[uti] = cb
             grid2.addWidget(cb, i // 3, i % 3)
-        pv.block(box)
+        pvl.addLayout(grid2)
+        btns = QHBoxLayout()
         allb = QPushButton("Select All")
         allb.clicked.connect(lambda: [c.setChecked(True) for c in self.viewer_checks.values()])
-        apply_ = QPushButton("Make Default")
-        apply_.setDefault(False)
+        apply_ = QPushButton("Make Fotohaus the Default")
         apply_.clicked.connect(self._apply_viewer)
-        pv.row("Default viewer", "Makes Fotohaus the app that opens the checked types.", [allb, apply_])
-        pv.note("You can also right-click any photo in Finder and choose Open With ▸ Fotohaus, or use "
-                "Get Info ▸ Open with ▸ Change All….")
-        pv.finish()
-        self.stack.addWidget(pv)
+        btns.addWidget(allb)
+        btns.addWidget(apply_)
+        btns.addStretch()
+        pvl.addLayout(btns)
+        note = QLabel("You can also choose “Open With ▸ Fotohaus” on any photo in Finder, or use Finder ▸ Get Info "
+                      "▸ Open with ▸ Change All…")
+        note.setObjectName("Muted")
+        note.setWordWrap(True)
+        pvl.addWidget(note)
+        pvl.addStretch()
+        tabs.addTab(pv, "Photo Viewer")
 
-        # ---------------------------------------------------------- Metadata
-        md = _Page("Name Tags & Metadata", "Keep your organizing work portable, so other apps see it too.")
-        md.group("Sidecar files")
-        self.write_ini = _switch(s.get("write_picasa_ini"))
-        md.row("Keep .picasa.ini files in sync", "Stars, captions, albums, name tags and edits are saved "
-               "next to your photos, readable by Picasa.", self.write_ini)
-        md.group("Inside your photos")
-        self.write_meta = _switch(s.get("write_meta_in_files"))
-        md.row("Write captions and tags into JPEGs", "Stored as standard IPTC/XMP metadata. "
-               "The image itself is never re-compressed.", self.write_meta)
-        self.write_faces = _switch(s.get("write_faces_in_files"))
-        md.row("Write name tags into JPEGs", "Stored as XMP face regions that other photo apps understand.",
-               self.write_faces)
-        md.group("Import")
-        imp = QPushButton("Import…")
+        # --- Picasa / metadata
+        md = QWidget()
+        mf = QVBoxLayout(md)
+        self.write_ini = QCheckBox("Keep .picasa.ini files in sync (stars, captions, albums, name tags, edits)")
+        self.write_ini.setChecked(bool(s.get("write_picasa_ini")))
+        self.write_meta = QCheckBox("Store captions and tags inside JPEG files (IPTC/XMP), like Picasa")
+        self.write_meta.setChecked(bool(s.get("write_meta_in_files")))
+        self.write_faces = QCheckBox("Store name tags inside JPEG files (XMP face regions)")
+        self.write_faces.setChecked(bool(s.get("write_faces_in_files")))
+        for w in (self.write_ini, self.write_meta, self.write_faces):
+            mf.addWidget(w)
+        imp = QPushButton("Import Picasa contacts.xml…")
         imp.clicked.connect(self._contacts)
-        md.row("Picasa contacts", "Bring in names from a Picasa contacts.xml file.", imp)
-        md.finish()
-        self.stack.addWidget(md)
+        mf.addWidget(imp, 0, Qt.AlignLeft)
+        mf.addStretch()
+        tabs.addTab(md, "Name Tags && Metadata")
 
-        # ---------------------------------------------------------- Intelligence
-        ai = _Page("Intelligence", "Everything below runs on your Mac. No photo ever leaves your computer.")
-        ai.group("Recognition")
-        self.faces_cb = _switch(s.get("faces_enabled"))
+        # --- Intelligence
+        ai = QWidget()
+        af = QVBoxLayout(ai)
+        self.faces_cb = QCheckBox("Find and recognize faces")
+        self.faces_cb.setChecked(bool(s.get("faces_enabled")))
         self.faces_cb.setEnabled(faces.available())
-        ai.row("Faces", "Find faces and suggest names for the people you've tagged.", self.faces_cb)
-        self.vision_cb = _switch(s.get("vision_enabled"))
+        self.vision_cb = QCheckBox("Recognize objects, scenes and text (Apple Vision, on-device)")
+        self.vision_cb.setChecked(bool(s.get("vision_enabled")))
         self.vision_cb.setEnabled(vision_mac.available())
-        ai.row("Objects, scenes and text", "Search for “dog”, “beach” or words inside photos, "
-               "using Apple's on-device Vision.", self.vision_cb)
-        ai.group("Natural-language search")
-        self.clip_cb = _switch(s.get("clip_enabled"))
-        ai.row("Search by description", "Find photos with phrases like “kids playing in the snow”.",
-               self.clip_cb)
-        self.clip_btn = QPushButton("Download")
+        self.clip_cb = QCheckBox("Natural-language search (CLIP model, 155 MB download)")
+        self.clip_cb.setChecked(bool(s.get("clip_enabled")))
+        for w in (self.faces_cb, self.vision_cb, self.clip_cb):
+            af.addWidget(w)
+        row = QHBoxLayout()
+        self.clip_btn = QPushButton("Download Model")
         self.clip_btn.clicked.connect(self.download_clip)
         self.clip_btn.setEnabled(not clip.downloaded())
-        self.clip_status = QLabel("Installed" if clip.downloaded() else "Not downloaded (155 MB)")
-        self.clip_status.setObjectName("PrefsRowDesc")
-        ai.row("Language model", "Needed once for search by description.", [self.clip_status, self.clip_btn])
-        ai.group("Maintenance")
-        rb = QPushButton("Re-analyze")
+        rb = QPushButton("Re-analyze All Photos")
         rb.clicked.connect(self.reindex)
-        ai.row("Re-analyze all photos", "Runs face and scene analysis again across the whole library.", rb)
-        ai.finish()
-        self.stack.addWidget(ai)
+        row.addWidget(self.clip_btn)
+        row.addWidget(rb)
+        row.addStretch()
+        af.addLayout(row)
+        self.clip_status = QLabel("Model installed." if clip.downloaded() else "Model not downloaded yet.")
+        self.clip_status.setObjectName("Muted")
+        af.addWidget(self.clip_status)
+        af.addStretch()
+        tabs.addTab(ai, "Intelligence")
 
-        # ---------------------------------------------------------- Slideshow & Email
-        es = _Page("Slideshow & Email", "Defaults for showing and sending photos.")
-        es.group("Slideshow")
+        # --- Email & Slideshow
+        es = QWidget()
+        ef = QFormLayout(es)
+        self.email = QComboBox()
+        for label, px in (("640 px", 640), ("800 px", 800), ("1024 px", 1024), ("1600 px", 1600), ("Original", 0)):
+            self.email.addItem(label, px)
+        self.email.setCurrentIndex(max(0, self.email.findData(int(s.get("email_size") or 800))))
+        ef.addRow("Email picture size", self.email)
         self.secs = QSpinBox()
         self.secs.setRange(1, 60)
-        self.secs.setSuffix(" s")
         self.secs.setValue(int(s.get("slideshow_seconds") or 4))
-        self.secs.setMinimumWidth(80)
-        es.row("Time per photo", "", self.secs)
-        self.trans = _combo([("Dissolve", "dissolve"), ("Pan and zoom", "panzoom"), ("Wipe", "wipe"),
-                             ("Shrink", "shrink"), ("None", "none"), ("Random", "random")],
-                            s.get("slideshow_transition") or "dissolve")
-        es.row("Transition", "", self.trans)
-        self.capt = _switch(s.get("slideshow_captions"))
-        es.row("Show captions", "", self.capt)
-        es.group("Email")
-        self.email = _combo([("Small (640 px)", 640), ("Medium (800 px)", 800), ("Large (1024 px)", 1024),
-                             ("Extra large (1600 px)", 1600), ("Original size", 0)],
-                            int(s.get("email_size") or 800))
-        es.row("Picture size", "Photos are resized before they're attached.", self.email)
-        es.finish()
-        self.stack.addWidget(es)
+        ef.addRow("Slideshow seconds per photo", self.secs)
+        self.trans = QComboBox()
+        for k, label in (("dissolve", "Dissolve"), ("panzoom", "Pan and zoom"), ("wipe", "Wipe"),
+                         ("shrink", "Shrink"), ("none", "None"), ("random", "Random")):
+            self.trans.addItem(label, k)
+        self.trans.setCurrentIndex(max(0, self.trans.findData(s.get("slideshow_transition"))))
+        ef.addRow("Slideshow transition", self.trans)
+        self.capt = QCheckBox("Show captions in slideshows")
+        self.capt.setChecked(bool(s.get("slideshow_captions")))
+        ef.addRow("", self.capt)
+        tabs.addTab(es, "Email && Slideshow")
 
-        # ---------------------------------------------------------- Toolbar
-        bt = _Page("Toolbar", "Choose the buttons at the bottom of the library window. Drag to reorder.")
-        bt.group("Buttons")
+        # --- Buttons
+        bt = QWidget()
+        bl = QVBoxLayout(bt)
+        bl.addWidget(QLabel("Buttons shown at the bottom of the window:"))
         self.btn_list = QListWidget()
-        self.btn_list.setObjectName("PrefsList")
         cur = list(s.get("button_bar") or [])
         order = cur + [k for k, _ in BUTTONS if k not in cur]
         labels = dict(BUTTONS)
         for k in order:
-            it = QListWidgetItem(theme.icon(k if k not in ("email", "geotag", "html", "desktop") else
-                                            {"email": "mail", "geotag": "pin", "html": "export",
-                                             "desktop": "library"}[k]), labels.get(k, k))
+            it = QListWidgetItem(labels.get(k, k))
             it.setData(Qt.UserRole, k)
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
             it.setCheckState(Qt.Checked if k in cur else Qt.Unchecked)
-            it.setSizeHint(QSize(200, 32))
             self.btn_list.addItem(it)
         self.btn_list.setDragDropMode(QAbstractItemView.InternalMove)
-        self.btn_list.setIconSize(QSize(18, 18))
-        self.btn_list.setFixedHeight(len(order) * 32 + 6)
-        self.btn_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        bt.block(self.btn_list)
-        bt.finish()
-        self.stack.addWidget(bt)
+        bl.addWidget(self.btn_list)
+        bl.addWidget(QLabel("Drag to reorder."))
+        tabs.addTab(bt, "Buttons")
 
-        # ---------------------------------------------------------- footer
-        foot = QWidget()
-        foot.setObjectName("PrefsFooter")
-        fl = QHBoxLayout(foot)
-        fl.setContentsMargins(16, 10, 16, 10)
-        fl.addStretch()
-        cancel = QPushButton("Cancel")
-        cancel.clicked.connect(self.reject)
-        done = QPushButton("Done")
-        done.setDefault(True)
-        done.clicked.connect(self.accept)
-        for b in (cancel, done):
-            b.setMinimumWidth(90)
-            fl.addWidget(b)
-        outer.addWidget(foot)
-        self.nav.setCurrentRow(0)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        # wide enough that every tab name fits on one row
+        need = bar.sizeHint().width() + 48
+        self.setMinimumWidth(need)
+        self.resize(max(need, 680), 560)
 
     def set_page(self, i: int) -> None:
-        if 0 <= i < self.nav.count():
-            self.nav.setCurrentRow(i)
+        if 0 <= i < self.tabs.count():
+            self.tabs.setCurrentIndex(i)
 
     def _apply_viewer(self):
         chosen = [u for u, cb in self.viewer_checks.items() if cb.isChecked()]

@@ -27,7 +27,7 @@ def _base_dirs() -> tuple[Path, Path]:
 
 DATA_DIR, CACHE_DIR = _base_dirs()
 _DEFAULT_DATA_DIR = DATA_DIR
-_POINTER = DATA_DIR / "location.txt"   # Tools > Settings > Library database > Move writes the new location here
+_POINTER = DATA_DIR / "location.txt"   # Tools > Options > Move Database writes the new location here
 try:
     _moved = _POINTER.read_text(encoding="utf-8").strip() if not _HOME_OVERRIDE else ""
     if _moved and Path(_moved).is_dir():
