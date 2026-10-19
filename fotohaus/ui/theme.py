@@ -59,6 +59,9 @@ def stylesheet() -> str:
     QLabel#Section {{ color: {sec}; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }}
     QLabel#Title {{ font-size: 18px; font-weight: 600; }}
     QLabel#Muted {{ color: {sec}; }}
+    QFrame#FolderList {{ background: {card_bg}; border: 1px solid {border}; border-radius: 8px; }}
+    QFrame#FolderList QLabel {{ background: transparent; }}
+    QLabel#FolderName {{ font-weight: 600; }}
     QLabel#OptHeading {{ color: {sec}; font-size: 11px; font-weight: 600; padding-top: 4px; }}
     QFrame#OptSep {{ color: {border}; background: {border}; max-height: 1px; border: none; margin: 4px 0; }}
     QWidget#RightPanel {{ background: {bar_bg}; border-left: 1px solid {border}; }}

@@ -9,11 +9,12 @@ from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFileDialog, QFileSystemModel, QFormLayout, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-                               QFrame, QRadioButton, QSpinBox, QSplitter, QTabWidget, QTreeView, QVBoxLayout, QWidget)
+                               QFrame, QRadioButton, QSpinBox, QTabWidget, QToolButton, QTreeView, QVBoxLayout, QWidget)
 
 from .. import macos, media
 from ..ai import clip, faces, vision_mac
 from ..paths import DATA_DIR
+from . import theme
 from .dialogs import default_pictures
 
 BUTTONS = [("share", "Share"), ("email", "Email"), ("print", "Print"), ("export", "Export"),
@@ -440,105 +441,252 @@ class _ModeProxy(QIdentityProxyModel):
 
 
 class FolderManagerDialog(QDialog):
-    """Picasa's Folder Manager: choose which folders are scanned always, once, or never."""
+    """Folder Manager: the folders Fotohaus watches, the subfolders it skips, and (folded away) a browser
+    of every folder on the Mac for fine-grained control."""
+
+    MODES = [("Keep up to date", "folder"), ("Scan once", "once")]
 
     def __init__(self, lib, parent=None):
         super().__init__(parent)
         self.lib = lib
         self.setWindowTitle("Folder Manager")
-        self.resize(820, 560)
+        self.setMinimumWidth(640)
         v = QVBoxLayout(self)
-        intro = QLabel("Choose how Fotohaus treats each folder. “Scan always” watches the folder and its subfolders; "
-                       "“Remove from Fotohaus” hides it. Files are never moved or changed.")
-        intro.setWordWrap(True)
+        v.setContentsMargins(18, 14, 18, 12)
+        v.setSpacing(8)
+        intro = QLabel("Fotohaus shows the photos in these folders. Your files are never moved or changed.")
+        intro.setObjectName("Muted")
         v.addWidget(intro)
-        split = QSplitter()
+
+        v.addWidget(self._heading("Watched Folders"))
+        self.watched = self._list_box()
+        v.addWidget(self.watched["frame"])
+        add = QPushButton("Add Folder…")
+        add.setIcon(theme.icon("plus"))
+        add.clicked.connect(self._add)
+        v.addWidget(add, 0, Qt.AlignLeft)
+
+        v.addSpacing(6)
+        v.addWidget(self._heading("Skipped Folders"))
+        self.skipped = self._list_box()
+        v.addWidget(self.skipped["frame"])
+
+        # ---- advanced: the full folder tree, folded away
+        self.more = QToolButton()
+        self.more.setText("Browse all folders on this Mac")
+        self.more.setCheckable(True)
+        self.more.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.more.setArrowType(Qt.RightArrow)
+        self.more.setAutoRaise(True)
+        self.more.toggled.connect(self._toggle_browser)
+        v.addWidget(self.more, 0, Qt.AlignLeft)
+        self.browser = self._build_browser()
+        self.browser.hide()
+        v.addWidget(self.browser, 1)
+
+        foot = QHBoxLayout()
+        self.summary = QLabel()
+        self.summary.setObjectName("Muted")
+        foot.addWidget(self.summary, 1)
+        rescan = QPushButton("Rescan Now")
+        rescan.clicked.connect(self.accept)          # the main window rescans when this closes
+        done = QPushButton("Done")
+        done.setDefault(True)
+        done.clicked.connect(self.accept)
+        foot.addWidget(rescan)
+        foot.addWidget(done)
+        v.addLayout(foot)
+        self._fill()
+
+    # ------------------------------------------------------------------ building blocks
+    @staticmethod
+    def _heading(text):
+        h = QLabel(text)
+        h.setObjectName("OptHeading")
+        return h
+
+    @staticmethod
+    def _list_box():
+        frame = QFrame()
+        frame.setObjectName("FolderList")
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        return {"frame": frame, "lay": lay}
+
+    def _photo_count(self, path):
+        p = path.rstrip(os.sep)
+        return self.lib.db.scalar("SELECT COUNT(*) FROM photos WHERE path LIKE ?", (p + os.sep + "%",), default=0)
+
+    @staticmethod
+    def _nice(path):
+        home = str(Path.home())
+        return "~" + path[len(home):] if path == home or path.startswith(home + os.sep) else path
+
+    def _row(self, box, root, skipped=False):
+        lay = box["lay"]
+        if lay.count():
+            sep = QFrame()
+            sep.setObjectName("OptSep")
+            sep.setFrameShape(QFrame.HLine)
+            lay.addWidget(sep)
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(12, 8, 10, 8)
+        h.setSpacing(10)
+        ic = QLabel()
+        ic.setPixmap(theme.icon("eye-off" if skipped else "folder",
+                                None if skipped else theme.ACCENT).pixmap(20, 20))
+        h.addWidget(ic)
+        txt = QVBoxLayout()
+        txt.setSpacing(1)
+        path = root["path"]
+        name = QLabel(os.path.basename(path.rstrip(os.sep)) or path)
+        name.setObjectName("FolderName")
+        sub = self._nice(path)
+        if not skipped:
+            n = self._photo_count(path)
+            sub += f"  ·  {n:,} item{'s' if n != 1 else ''}"
+        detail = QLabel(sub)
+        detail.setObjectName("Muted")
+        detail.setToolTip(path)
+        txt.addWidget(name)
+        txt.addWidget(detail)
+        h.addLayout(txt, 1)
+        if skipped:
+            again = QPushButton("Show Again")
+            again.clicked.connect(lambda _=False, p=path: self._set(p, None))
+            h.addWidget(again)
+        elif root["kind"] == "applephotos":
+            lab = QLabel("Apple Photos (read-only)")
+            lab.setObjectName("Muted")
+            h.addWidget(lab)
+        else:
+            mode = QComboBox()
+            for label, k in self.MODES:
+                mode.addItem(label, k)
+            mode.setCurrentIndex(max(0, mode.findData(root["kind"])))
+            mode.setFixedWidth(160)
+            mode.currentIndexChanged.connect(lambda _i, p=path, c=mode: self._set(p, c.currentData()))
+            h.addWidget(mode)
+        if not skipped:
+            rm = QToolButton()
+            rm.setIcon(theme.icon("close"))
+            rm.setAutoRaise(True)
+            rm.setToolTip("Stop watching this folder (the files stay on your Mac)")
+            rm.clicked.connect(lambda _=False, p=path: self._remove(p))
+            h.addWidget(rm)
+        lay.addWidget(w)
+
+    def _empty(self, box, text):
+        lab = QLabel(text)
+        lab.setObjectName("Muted")
+        lab.setContentsMargins(12, 10, 12, 10)
+        box["lay"].addWidget(lab)
+
+    # ------------------------------------------------------------------ data
+    def _fill(self):
+        for box in (self.watched, self.skipped):
+            lay = box["lay"]
+            while lay.count():
+                it = lay.takeAt(0)
+                if it.widget():
+                    it.widget().deleteLater()
+        roots = list(self.lib.roots())
+        watched = [r for r in roots if r["kind"] != "exclude"]
+        skipped = [r for r in roots if r["kind"] == "exclude"]
+        for r in watched:
+            self._row(self.watched, r)
+        if not watched:
+            self._empty(self.watched, "No folders yet. Click Add Folder… to choose where your photos are.")
+        for r in skipped:
+            self._row(self.skipped, r, skipped=True)
+        if not skipped:
+            self._empty(self.skipped, "Nothing is skipped. To skip a folder, right-click it in the sidebar and choose Remove from Fotohaus.")
+        self.summary.setText(f"{len(watched)} folder{'s' if len(watched) != 1 else ''} watched  ·  "
+                             f"{len(skipped)} skipped")
+        if hasattr(self, "proxy"):
+            self.proxy.refresh()
+            self._cur(self.tree.currentIndex())
+        self.adjustSize()
+
+    def _set(self, path, mode):
+        self.lib.set_folder_mode(path, mode)
+        self.changed = True
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self._fill)       # rebuild after the clicked widget's signal returns
+
+    def _remove(self, path):
+        if QMessageBox.question(self, "Stop Watching", f"Stop showing the photos in “{os.path.basename(path)}”?\n\n"
+                                "The files stay on your Mac, untouched.") == QMessageBox.Yes:
+            self._set(path, None)
+
+    def _add(self):
+        d = QFileDialog.getExistingDirectory(self, "Add a folder to Fotohaus", default_pictures())
+        if d:
+            self._set(d, "folder")
+
+    # ------------------------------------------------------------------ advanced browser
+    def _build_browser(self):
+        box = QWidget()
+        h = QHBoxLayout(box)
+        h.setContentsMargins(0, 0, 0, 0)
         self.fs = QFileSystemModel(self)
         self.fs.setFilter(QDir.AllDirs | QDir.NoDotAndDotDot)
-        self.fs.setRootPath("/")
-        self.proxy = _ModeProxy(lib, self)
+        home_path = str(Path.home())
+        self.fs.setRootPath(home_path)
+        self.proxy = _ModeProxy(self.lib, self)
         self.proxy.setSourceModel(self.fs)
         self.tree = QTreeView()
         self.tree.setModel(self.proxy)
         for c in (1, 2, 3):
             self.tree.hideColumn(c)
         self.tree.setHeaderHidden(True)
-        home = self.proxy.mapFromSource(self.fs.index(str(Path.home())))
-        self.tree.setCurrentIndex(home)
-        self.tree.expand(home)
-        self.tree.scrollTo(home)
+        self.tree.setRootIndex(self.proxy.mapFromSource(self.fs.index(home_path)))
+        self.tree.setMinimumHeight(240)
         self.tree.selectionModel().currentChanged.connect(self._cur)
-        split.addWidget(self.tree)
-        right = QWidget()
-        rv = QVBoxLayout(right)
-        self.path_lbl = QLabel()
+        h.addWidget(self.tree, 3)
+        side = QVBoxLayout()
+        self.path_lbl = QLabel("Select a folder")
+        self.path_lbl.setObjectName("FolderName")
         self.path_lbl.setWordWrap(True)
-        self.path_lbl.setObjectName("Title")
-        rv.addWidget(self.path_lbl)
-        self.group = QButtonGroup(self)
+        side.addWidget(self.path_lbl)
         self.radios = {}
-        for mode, label in (("folder", "Scan always"), ("once", "Scan once"), ("exclude", "Remove from Fotohaus"),
-                            (None, "Not watched (inherit)")):
+        group = QButtonGroup(self)
+        for mode, label in (("folder", "Keep up to date"), ("once", "Scan once"), ("exclude", "Skip"),
+                            (None, "Same as the folder above")):
             rb = QRadioButton(label)
-            self.group.addButton(rb)
+            group.addButton(rb)
             self.radios[mode] = rb
-            rb.toggled.connect(lambda on, m=mode: on and self._set(m))
-            rv.addWidget(rb)
-        rv.addSpacing(10)
-        rv.addWidget(QLabel("Watched and removed folders:"))
-        self.list = QListWidget()
-        self.list.itemClicked.connect(self._jump)
-        rv.addWidget(self.list, 1)
-        legend = QLabel("<span style='color:#2e9e4f'>●</span> scan always   <span style='color:#d79b00'>●</span> "
-                        "scan once   <span style='color:#c0392b'>●</span> removed")
-        rv.addWidget(legend)
-        split.addWidget(right)
-        split.setSizes([480, 320])
-        v.addWidget(split, 1)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok)
-        bb.accepted.connect(self.accept)
-        v.addWidget(bb)
+            rb.toggled.connect(lambda on, m=mode: on and not self._suppress and self._set(self._path(), m))
+            side.addWidget(rb)
+        side.addStretch()
+        h.addLayout(side, 2)
         self._suppress = False
-        self._fill()
-        self._cur(self.tree.currentIndex())
+        return box
+
+    def _toggle_browser(self, on):
+        self.more.setArrowType(Qt.DownArrow if on else Qt.RightArrow)
+        self.browser.setVisible(on)
+        self.adjustSize()
 
     def _path(self, idx=None) -> str:
         idx = idx or self.tree.currentIndex()
         return self.fs.filePath(self.proxy.mapToSource(idx))
 
-    def _fill(self):
-        self.list.clear()
-        for r in self.lib.roots():
-            it = QListWidgetItem(f"{'●'} {r['path']}   — " + {"folder": "scan always", "once": "scan once",
-                                                              "exclude": "removed", "applephotos": "Apple Photos"}
-                                 .get(r["kind"], r["kind"]))
-            it.setData(Qt.UserRole, r["path"])
-            it.setForeground(QColor({"folder": "#2e9e4f", "once": "#d79b00", "exclude": "#c0392b"}.get(r["kind"], "#2e9e4f")))
-            self.list.addItem(it)
-
     def _cur(self, idx, *_):
         if not idx.isValid():
+            for rb in self.radios.values():
+                rb.setEnabled(False)
             return
+        for rb in self.radios.values():
+            rb.setEnabled(True)
         p = self._path(idx)
-        self.path_lbl.setText(p)
+        self.path_lbl.setText(self._nice(p))
         mode, inherited = self.lib.folder_mode(p)
         self._suppress = True
-        self.radios[None if inherited else mode].setChecked(True)
+        self.radios[None if inherited or mode is None else mode].setChecked(True)
         self._suppress = False
-
-    def _set(self, mode):
-        if self._suppress:
-            return
-        p = self._path()
-        self.lib.set_folder_mode(p, mode)
-        self.proxy.refresh()
-        self._fill()
-        self.changed = True
-
-    def _jump(self, it):
-        idx = self.proxy.mapFromSource(self.fs.index(it.data(Qt.UserRole)))
-        self.tree.setCurrentIndex(idx)
-        self.tree.scrollTo(idx)
 
 
 # ====================================================================== Import
