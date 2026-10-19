@@ -173,15 +173,10 @@ class VideoPlayer(QWidget):
             img = None
         t = self.player.position() / 1000
         if img is None or img.isNull():
-            import cv2
-            cap = cv2.VideoCapture(self.path)
-            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
-            ok, fr = cap.read()
-            cap.release()
-            if not ok:
+            from .. import media
+            pil = media.video_frame(self.path, None, at=t)
+            if pil is None:
                 return
-            from PIL import Image
-            pil = Image.fromarray(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB))
             out = self._snap_name(t)
             pil.save(out, quality=92)
         else:

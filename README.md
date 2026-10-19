@@ -125,8 +125,9 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
 
 1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases) (Apple Silicon Macs).
 2. Open the disk image and drag **Fotohaus** into **Applications**.
-3. The first time, right-click Fotohaus and choose **Open**. Fotohaus isn't notarized by Apple yet,
-   so macOS asks once. You can also allow it in *System Settings ▸ Privacy & Security*.
+3. Open Fotohaus. Because it isn't notarized by Apple yet, macOS blocks it the first time: open
+   *System Settings ▸ Privacy & Security*, scroll down and click **Open Anyway** next to the
+   message about Fotohaus. You only need to do this once.
 4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Options ▸ Photo Viewer*.
 
 ### Run from source
@@ -141,7 +142,8 @@ python -m fotohaus.cli --help # command line
 ```
 
 Your library database lives in `~/Library/Application Support/Fotohaus` (set `FOTOHAUS_HOME` to use
-a different place). Run the tests with `python tests/test_fotohaus.py`. To build the app and disk
+a different place). Run the tests with `pip install -r requirements-dev.txt` and then
+`python tests/test_fotohaus.py`. To build the app and disk
 image, see `packaging/build_mac_app.py`.
 
 ## Support
@@ -157,7 +159,7 @@ Bug reports and ideas are welcome in [Issues](../../issues). Pull requests are c
 **Free to use for everyone**, at home or at work. Selling Fotohaus, or bundling it into a paid
 product or service, needs a license from the author; see [COMMERCIAL.md](COMMERCIAL.md). Full terms
 are in [LICENSE](LICENSE). The app also includes third-party components under their own licenses,
-listed in `packaging/THIRD_PARTY_NOTICES.md`.
+listed in `packaging/THIRD_PARTY_NOTICES.md`. The app contains no GPL-licensed code.
 
 <sub>Screenshots use freely licensed sample images from the scikit-image, imageio and Pillow
 projects. Fotohaus is an independent project.</sub>

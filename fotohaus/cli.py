@@ -19,10 +19,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import os
 import sys
-
-os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 
 
 def _lib():

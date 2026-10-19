@@ -34,6 +34,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+Third-party components distributed with the Fotohaus app keep their own licenses, listed in
+packaging/THIRD_PARTY_NOTICES.md; the conditions above apply to Fotohaus's own code.
+
 Fotohaus is an independent project and is not affiliated with, sponsored by or
 endorsed by any other photo software vendor. All trademarks belong to their
 respective owners.

@@ -37,9 +37,12 @@ from fotohaus import __version__  # noqa: E402
 PYVER = "3.12"
 BUNDLE_ID = "app.fotohaus.Fotohaus"
 MIN_MACOS = "14.0"
-REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av", "pyobjc-framework-UniformTypeIdentifiers", "pyobjc-framework-LocalAuthentication", "numpy", "pillow", "pillow-heif", "opencv-python-headless", "piexif",
-                "onnxruntime", "tokenizers", "rawpy", "pyobjc-core", "pyobjc-framework-Cocoa",
-                "pyobjc-framework-Quartz", "pyobjc-framework-Vision"]
+REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "numpy", "pillow", "piexif", "rawpy", "onnxruntime",
+                "tokenizers", "pyobjc-core", "pyobjc-framework-Cocoa", "pyobjc-framework-Quartz",
+                "pyobjc-framework-Vision", "pyobjc-framework-AVFoundation",
+                "pyobjc-framework-UniformTypeIdentifiers", "pyobjc-framework-LocalAuthentication"]
+# Never ship these: they bundle GPL-licensed code (x264, x265, GPL builds of FFmpeg).
+FORBIDDEN = ["cv2", "av", "pillow_heif", "opencv_python_headless", "opencv_python", "pi_heif"]
 
 # Qt pieces we ship (everything else in PySide6 is removed)
 QT_MODULES = {"QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtSvg", "QtMultimedia", "QtMultimediaWidgets",
@@ -49,7 +52,7 @@ QT_PLUGIN_DIRS = {"platforms", "styles", "imageformats", "iconengines", "tls", "
 SITE_REMOVE = ["pip", "setuptools", "wheel", "PyObjCTest", "google", "huggingface_hub", "hf_xet", "httpx2", "httpcore2", "anyio", "h11", "fsspec",
                "filelock", "click", "tqdm", "yaml", "_yaml", "sympy", "mpmath", "bin", "truststore",
                "coloredlogs", "humanfriendly", "onnxruntime/tools", "onnxruntime/transformers",
-               "onnxruntime/quantization", "cv2/data", "numpy/tests", "numpy/_core/tests", "PIL/tests"]
+               "onnxruntime/quantization", "numpy/tests", "numpy/_core/tests", "PIL/tests"]
 STDLIB_REMOVE = ["test", "idlelib", "tkinter", "turtledemo", "ensurepip", "lib2to3", "pydoc_data",
                  f"config-{PYVER}-darwin"]
 
@@ -63,7 +66,6 @@ _a = list(getattr(_sys, "orig_argv", _sys.argv))
 _args = [x for x in _a[1:] if not x.startswith("-psn")]
 if _os.path.basename(_sys.executable) == "Fotohaus" and all(
         not x.startswith("-") and not x.endswith(".py") and _os.path.exists(x) for x in _args):
-    _os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
     try:
         from fotohaus.app import main as _main
         _rc = _main([_a[0] if _a else "Fotohaus"] + _args)
@@ -97,6 +99,29 @@ def run(cmd, **kw):
     subprocess.run([str(c) for c in cmd], check=True, **kw)
 
 
+GPL_MARKERS = (b"--enable-gpl", b"--enable-libx264", b"--enable-libx265", b"x264_encoder_open", b"x265_encoder_open",
+               b"libpostproc license")
+
+
+def assert_no_gpl(root: Path):
+    """Fail the build if any GPL-only library (x264, x265, GPL FFmpeg) slipped into the bundle."""
+    bad = []
+    for p in root.rglob("*"):
+        if not p.is_file():
+            continue
+        n = p.name.lower()
+        if any(k in n for k in ("x264", "x265", "postproc")):
+            bad.append(str(p))
+            continue
+        if is_macho(p) and p.stat().st_size > 0:
+            data = p.read_bytes()
+            if any(m in data for m in GPL_MARKERS):
+                bad.append(str(p))
+    if bad:
+        raise SystemExit("GPL components found in the bundle:\n  " + "\n  ".join(bad))
+    print("license check: no GPL-only components in the bundle")
+
+
 def is_macho(p: Path) -> bool:
     try:
         with open(p, "rb") as fh:
@@ -121,13 +146,17 @@ def install_site(site: Path, prepared: Path | None):
 
 
 def prune_site(site: Path):
+    for p in list(site.iterdir()):
+        stem = p.name.split("-")[0].split(".")[0].lstrip("_").lower()
+        if stem in FORBIDDEN:
+            shutil.rmtree(p) if p.is_dir() else p.unlink()
     for rel in SITE_REMOVE:
         p = site / rel
         if p.is_dir():
             shutil.rmtree(p)
         elif p.exists():
             p.unlink()
-    removed = {r.split("/")[0].lower().replace("_", "-") for r in SITE_REMOVE}
+    removed = {r.lower().replace("_", "-") for r in SITE_REMOVE if "/" not in r}
     removed |= {"httpx2", "httpcore2", "pyyaml", "hf-xet", "huggingface-hub", "protobuf"}
     for d in list(site.glob("*.dist-info")):
         if d.name.split("-")[0].lower().replace("_", "-") in removed:
@@ -277,10 +306,22 @@ def build(args):
     lic.mkdir()
     shutil.copy2(SRC / "LICENSE", lic / "Fotohaus-LICENSE.txt")
     shutil.copy2(SRC / "packaging" / "THIRD_PARTY_NOTICES.md", lic / "THIRD_PARTY_NOTICES.md")
+    for f in (SRC / "packaging" / "licenses").glob("*.txt"):
+        shutil.copy2(f, lic / f.name)
     for d in site.glob("*.dist-info"):
+        pkg = d.name.split("-")[0]
         for f in d.rglob("*"):
-            if f.is_file() and f.name.upper().startswith(("LICENSE", "COPYING", "NOTICE")):
-                shutil.copy2(f, lic / f"{d.name.split('-')[0]}-{f.name}")
+            if f.is_file() and f.name.upper().startswith(("LICENSE", "LICENCE", "COPYING", "NOTICE")):
+                rel = f.relative_to(d).as_posix()
+                rel = rel[len("licenses/"):] if rel.startswith("licenses/") else rel
+                shutil.copy2(f, lic / f"{pkg}-{rel.replace('/', '_')}")
+    for rel, name in (("onnxruntime/LICENSE", "onnxruntime-LICENSE"),
+                      ("onnxruntime/ThirdPartyNotices.txt", "onnxruntime-ThirdPartyNotices.txt")):
+        if (site / rel).exists():
+            shutil.copy2(site / rel, lic / name)
+    py_lic = contents / "lib" / f"python{PYVER}" / "LICENSE.txt"
+    if py_lic.exists():
+        shutil.copy2(py_lic, lic / "CPython-LICENSE.txt")
     # icon + plist
     shutil.copy2(args.icns, contents / "Resources" / "Fotohaus.icns")
     info = {
@@ -335,6 +376,7 @@ def build(args):
         os.chmod(p, m | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
                  ((stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) if p.is_dir() or m & stat.S_IXUSR else 0))
     shutil.rmtree(work)
+    assert_no_gpl(app)
     if args.rcodesign:
         run([args.rcodesign, "sign", str(app)])
     return app

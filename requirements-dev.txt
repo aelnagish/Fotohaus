@@ -1,0 +1,6 @@
+# Only for running the tests (they create small sample videos and HEIC files).
+# Not used by the app and never bundled.
+-r requirements.txt
+opencv-python-headless
+av
+pillow-heif

@@ -1,8 +1,8 @@
 """Movie Maker: turn photos (and video clips) into an MP4 slideshow movie, like Picasa's Movie Maker.
 
 Transitions: dissolve, pan & zoom (Ken Burns), wipe, none. Optional title slide, captions and
-a music track (trimmed / faded to the movie length). Encoded with PyAV (FFmpeg): uses the
-hardware H.264 encoder on macOS when available.
+a music track (trimmed / faded to the movie length). Encoded as H.264 MP4 with macOS's own
+AVFoundation (hardware encoder); off macOS, PyAV is used if it happens to be installed.
 """
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
-from . import media
+import os
+
+from . import macmedia, media
 from .edits import render
 from .exporter import _font
 from .picasa.ini import parse_filters
@@ -90,7 +92,7 @@ def _blend(a: Image.Image, b: Image.Image, t: float, kind: str) -> Image.Image:
     return Image.blend(a, b, t)
 
 
-def _pick_codec(av):
+def _pick_codec(av):  # pragma: no cover - development fallback off macOS
     for name in ("h264_videotoolbox", "libx264", "h264", "mpeg4"):
         try:
             av.codec.Codec(name, "w")
@@ -100,33 +102,42 @@ def _pick_codec(av):
     return "mpeg4"
 
 
+class _PyAVWriter:  # pragma: no cover - development fallback off macOS
+    def __init__(self, path, size, fps):
+        import av
+        self.av, self.fps = av, fps
+        self.container = av.open(path, mode="w")
+        codec = _pick_codec(av)
+        self.vs = self.container.add_stream(codec, rate=fps)
+        self.vs.width, self.vs.height = size
+        self.vs.pix_fmt = "yuv420p"
+        self.vs.bit_rate = 6_000_000
+
+    def add(self, img):
+        frame = self.av.VideoFrame.from_ndarray(np.asarray(img.convert("RGB")), format="rgb24")
+        for pkt in self.vs.encode(frame):
+            self.container.mux(pkt)
+
+    def close(self):
+        for pkt in self.vs.encode():
+            self.container.mux(pkt)
+        self.container.close()
+
+
+def _writer(path, size, fps):
+    if macmedia.available():
+        return macmedia.MovieWriter(path, size, fps)
+    return _PyAVWriter(path, size, fps)
+
+
 def make_movie(rows, opts: MovieOptions, progress=None, should_stop=None) -> str:
-    import av
     size = (opts.size[0] // 2 * 2, opts.size[1] // 2 * 2)
-    container = av.open(opts.out_path, mode="w")
-    codec = _pick_codec(av)
-    vs = container.add_stream(codec, rate=opts.fps)
-    vs.width, vs.height = size
-    vs.pix_fmt = "yuv420p"
-    if codec in ("libx264", "h264"):
-        vs.options = {"crf": "20", "preset": "medium"}
-    elif codec == "h264_videotoolbox":
-        vs.bit_rate = 8_000_000
-    else:
-        vs.bit_rate = 6_000_000
-    astream = None
-    if opts.audio_path:
-        try:
-            astream = container.add_stream("aac", rate=44100)
-            astream.layout = "stereo"
-        except Exception as e:
-            print("no audio:", e)
-            astream = None
+    want_music = bool(opts.audio_path) and macmedia.available()
+    video_path = opts.out_path + ".silent.mp4" if want_music else opts.out_path
+    writer = _writer(video_path, size, opts.fps)
 
     def emit(img: Image.Image):
-        frame = av.VideoFrame.from_ndarray(np.asarray(img.convert("RGB")), format="rgb24")
-        for pkt in vs.encode(frame):
-            container.mux(pkt)
+        writer.add(img)
 
     slide_n = max(1, int(opts.slide_seconds * opts.fps))
     trans_n = 0 if opts.transition in ("none", "panzoom") else max(1, int(opts.transition_seconds * opts.fps))
@@ -176,66 +187,37 @@ def make_movie(rows, opts: MovieOptions, progress=None, should_stop=None) -> str
             emit(f)
             frames_written += 1
         prev_last = frames[-1] if frames else prev_last
-    for pkt in vs.encode():
-        container.mux(pkt)
-    duration = frames_written / opts.fps
-    if astream is not None:
+    writer.close()
+    if want_music:
         try:
-            _mux_audio(container, astream, opts.audio_path, duration)
-        except Exception as e:  # keep the silent movie if audio fails
-            print("audio failed:", e)
-    container.close()
+            ok = macmedia.add_music(video_path, opts.audio_path, opts.out_path)
+        except Exception as e:  # keep the silent movie if the music can't be added
+            print("music failed:", e)
+            ok = False
+        if ok:
+            os.remove(video_path)
+        else:
+            os.replace(video_path, opts.out_path)
     return opts.out_path
 
 
 def _video_frames(path, size, opts, max_seconds=30):
-    import av
     try:
+        if macmedia.available():
+            for img in macmedia.video_frames(path, opts.fps, max_seconds, max_dim=max(size)):
+                yield _fit(img, size, opts.full_frame, opts.background)
+            return
+        import av  # pragma: no cover - development fallback off macOS
         with av.open(path) as c:
             s = c.streams.video[0]
-            fps_in = float(s.average_rate or 30)
-            step = max(1, round(fps_in / opts.fps))
+            step = max(1, round(float(s.average_rate or 30) / opts.fps))
             n = 0
             for i, fr in enumerate(c.decode(s)):
                 if i % step:
                     continue
-                img = fr.to_image()
-                yield _fit(img, size, opts.full_frame, opts.background)
+                yield _fit(fr.to_image(), size, opts.full_frame, opts.background)
                 n += 1
                 if n >= max_seconds * opts.fps:
                     break
     except Exception:
         return
-
-
-def _mux_audio(container, astream, audio_path: str, duration: float):
-    import av
-    resampler = av.AudioResampler(format="fltp", layout="stereo", rate=44100)
-    fade = 2.0
-    with av.open(audio_path) as src:
-        sstream = src.streams.audio[0]
-        written = 0.0
-        for frame in src.decode(sstream):
-            for rf in resampler.resample(frame):
-                t0 = written
-                dur = rf.samples / 44100
-                if t0 >= duration:
-                    break
-                arr = rf.to_ndarray()
-                # fade out over the last seconds
-                if t0 + dur > duration - fade:
-                    tt = t0 + np.arange(arr.shape[-1]) / 44100
-                    g = np.clip((duration - tt) / fade, 0, 1).astype(np.float32)
-                    arr = (arr * g).astype(np.float32)
-                    nf = av.AudioFrame.from_ndarray(arr, format="fltp", layout="stereo")
-                    nf.sample_rate = 44100
-                    rf = nf
-                rf.pts = int(round(t0 * 44100))
-                rf.time_base = __import__("fractions").Fraction(1, 44100)
-                for pkt in astream.encode(rf):
-                    container.mux(pkt)
-                written += dur
-            if written >= duration:
-                break
-    for pkt in astream.encode():
-        container.mux(pkt)
