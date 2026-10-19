@@ -30,7 +30,7 @@ CTRL_W = 280      # … and every control starts here, all the same width
 
 class _Page(QWidget):
     """One Options tab: labels right-aligned to a shared centre line, controls left-aligned from it,
-    sections separated by a hairline and a heading at the left edge."""
+    sections separated by a hairline and a heading at the start of the label column."""
 
     def __init__(self):
         super().__init__()
@@ -44,6 +44,8 @@ class _Page(QWidget):
         self.g.setColumnMinimumWidth(2, CTRL_W)
         self._r = 0
         self._sections = 0
+        self.labels: list[QLabel] = []
+        self.headings: list[QLabel] = []
 
     def _next(self):
         r = self._r
@@ -60,13 +62,16 @@ class _Page(QWidget):
         self._sections += 1
         h = QLabel(text)
         h.setObjectName("OptHeading")
-        self.g.addWidget(h, self._next(), 0, 1, 4, Qt.AlignLeft)   # section titles sit at the left edge
+        # section titles start where the label column starts, just left of the longest label
+        self.g.addWidget(h, self._next(), 1, 1, 2, Qt.AlignLeft)
+        self.headings.append(h)
 
     def row(self, label, *controls, fixed=True):
         r = self._next()
         lab = QLabel(label)
         lab.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.g.addWidget(lab, r, 1)
+        self.labels.append(lab)
         if len(controls) == 1:
             c = controls[0]
             if fixed and isinstance(c, (QComboBox, QSpinBox, QLineEdit)):
@@ -86,6 +91,12 @@ class _Page(QWidget):
 
     def finish(self):
         self.g.setRowStretch(self._r, 1)
+
+    def indent_headings(self, longest: int) -> None:
+        """Start the section titles a couple of letters left of the longest label (shared by all tabs)."""
+        lead = 2 * self.fontMetrics().averageCharWidth()
+        for h in self.headings:
+            h.setContentsMargins(max(0, LABEL_W - longest - lead), 0, 0, 0)
 
 
 def _hrow(*widgets):
@@ -319,6 +330,10 @@ class OptionsDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
+        pages = [tabs.widget(i) for i in range(tabs.count()) if isinstance(tabs.widget(i), _Page)]
+        longest = max((lab.sizeHint().width() for pg in pages for lab in pg.labels), default=0)
+        for pg in pages:
+            pg.indent_headings(longest)
         # wide enough that every tab name fits on one row
         need = bar.sizeHint().width() + 48
         self.setMinimumWidth(need)
