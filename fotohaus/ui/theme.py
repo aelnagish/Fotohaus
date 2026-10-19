@@ -41,8 +41,12 @@ def stylesheet() -> str:
     border = "#3a3b3f" if dark else "#d9dce1"
     return f"""
     QTreeWidget#Sidebar {{ background: {side_bg}; color: {side_fg}; border: none; font-size: 13px; }}
-    QTreeWidget#Sidebar::item {{ padding: 3px 2px; border-radius: 5px; }}
-    QTreeWidget#Sidebar::item:selected {{ background: {ACCENT.name()}; color: white; }}
+    QTreeWidget#Sidebar {{ outline: 0; show-decoration-selected: 0; }}
+    QTreeWidget#Sidebar::item {{ padding: 3px 2px; border: none; }}
+    QTreeWidget#Sidebar::item:selected, QTreeWidget#Sidebar::item:selected:active,
+    QTreeWidget#Sidebar::item:selected:!active {{ background: transparent; color: white; }}
+    QTreeWidget#Sidebar::item:hover:!selected {{ background: transparent; }}
+    QTreeWidget#Sidebar::branch, QTreeWidget#Sidebar::branch:selected {{ background: transparent; }}
     QListView#Grid {{ background: {grid_bg}; border: none; }}
     QWidget#BottomBar, QWidget#EditorBar {{ background: {bar_bg}; border-top: 1px solid {border}; }}
     QWidget#InfoPanel {{ background: {bar_bg}; border-left: 1px solid {border}; }}

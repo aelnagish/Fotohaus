@@ -13,6 +13,17 @@ from .grid import MIME_IDS
 ROLE = Qt.UserRole + 7
 
 
+def _sidebar_icon(name: str):
+    """Normal glyph, plus a white version shown on the blue selection."""
+    from PySide6.QtGui import QColor, QIcon
+    ic = QIcon()
+    normal, white = theme.icon(name), theme.icon(name, QColor("white"))
+    for size in (16, 32):
+        ic.addPixmap(normal.pixmap(size, size), QIcon.Normal)
+        ic.addPixmap(white.pixmap(size, size), QIcon.Selected)
+    return ic
+
+
 class Sidebar(QTreeWidget):
     selected = Signal(str, object)          # kind, id
     dropped_on_album = Signal(int, list)    # album id, photo ids
@@ -60,7 +71,7 @@ class Sidebar(QTreeWidget):
             it.setText(0, f"{text}  ")
             it.setData(0, Qt.UserRole + 8, count)
         if icon_name:
-            it.setIcon(0, theme.icon(icon_name))
+            it.setIcon(0, _sidebar_icon(icon_name))
         parent.addChild(it)
         return it
 
@@ -143,7 +154,7 @@ class Sidebar(QTreeWidget):
             else:
                 it = QTreeWidgetItem([os.path.basename(path)])
                 it.setFlags(Qt.ItemIsEnabled)
-                it.setIcon(0, theme.icon("folder"))
+                it.setIcon(0, _sidebar_icon("folder"))
                 parent.addChild(it)
             nodes[path] = it
             return it
@@ -155,7 +166,7 @@ class Sidebar(QTreeWidget):
             else:
                 ri = QTreeWidgetItem([os.path.basename(rp) or rp])
                 ri.setFlags(Qt.ItemIsEnabled)
-                ri.setIcon(0, theme.icon("folder"))
+                ri.setIcon(0, _sidebar_icon("folder"))
                 sec.addChild(ri)
             ri.setToolTip(0, rp)
             for path in sorted(p for p in folders if p.startswith(rp + os.sep)):
@@ -195,6 +206,21 @@ class Sidebar(QTreeWidget):
         if it and it.data(0, ROLE):
             k, i = it.data(0, ROLE)
             self.context.emit(k, i, self.viewport().mapToGlobal(pos))
+
+    def drawRow(self, painter, option, index):
+        # One clean rounded highlight across the whole row (like Finder's sidebar) instead of the
+        # style's default, which leaves the indent area square and clips the rounded corner.
+        if self.selectionModel().isSelected(index):
+            from PySide6.QtCore import QRectF
+            painter.save()
+            painter.setRenderHint(painter.RenderHint.Antialiasing)
+            painter.setPen(Qt.NoPen)
+            col = theme.ACCENT if self.hasFocus() or self.window().isActiveWindow() else theme.ACCENT.lighter(135)
+            painter.setBrush(col)
+            r = option.rect
+            painter.drawRoundedRect(QRectF(6, r.top() + 1, self.viewport().width() - 12, r.height() - 2), 6, 6)
+            painter.restore()
+        super().drawRow(painter, option, index)
 
     def paintEvent(self, e):
         super().paintEvent(e)
