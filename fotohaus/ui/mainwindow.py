@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QMimeData, QSettings, QSize, Qt, QTimer, QUrl, Signal
@@ -71,8 +72,9 @@ class MainWindow(QMainWindow):
         self._refresh_timer = QTimer(self, singleShot=True, interval=500, timeout=self._refresh_all)
         self._people_timer = QTimer(self, singleShot=True, interval=1500, timeout=self._refresh_people)
         self._search_timer = QTimer(self, singleShot=True, interval=280, timeout=self._do_search)
-        self._rescan_timer = QTimer(self, interval=10 * 60 * 1000, timeout=self.start_scan)
+        self._rescan_timer = QTimer(self, interval=10 * 60 * 1000, timeout=lambda: self.start_scan(manual=False))
         self._rescan_timer.start()
+        QApplication.instance().applicationStateChanged.connect(self._on_app_state)
         self._restore()
         self.sidebar.rebuild()
         self.sidebar.select("all", None)
@@ -412,7 +414,7 @@ class MainWindow(QMainWindow):
         t.addAction("Back Up Pictures…", self.backup)
         t.addAction("Adjust Date and Time…", self.adjust_dates)
         t.addSeparator()
-        t.addAction("Rescan Folders Now", self.start_scan, S("Ctrl+R"))
+        t.addAction("Rescan Folders Now", lambda: self.start_scan(), S("Ctrl+R"))
         t.addAction("Refresh Thumbnails", self.refresh_thumbnails)
         t.addAction("Analyze Photos Now (faces, objects, text)", self.start_index)
         t.addAction("Show Duplicate Files", lambda: self._go("dupes", None))
@@ -463,15 +465,28 @@ class MainWindow(QMainWindow):
                     for folder in dlg.folders():
                         self.lib.add_root(folder)
         if list(self.lib.roots()):
-            self.start_scan()
+            self.start_scan(manual=False)
         self._update_empty()
 
-    def start_scan(self):
+    def start_scan(self, manual: bool = True):
+        """Look for new and changed pictures. A manual scan (Rescan Now, after adding folders) goes
+        ahead of background indexing, which pauses and resumes afterwards, and also rechecks
+        "Scan once" folders."""
         def work(job):
             def prog(path, n):
                 job.report(f"Scanning {os.path.basename(path) or path}…  {n} new", 0, 0)
-            return self.lib.scan(progress=prog, should_stop=job.should_stop)
-        self.jobs.submit("scan", work, on_done=lambda stats: self.start_index())
+            return self.lib.scan(progress=prog, should_stop=job.should_stop, include_once=manual)
+        self._last_scan_request = time.time()
+        cur = self.jobs.current
+        if cur is not None and cur.name == "index":
+            cur.stop()                      # indexing restarts when the scan finishes
+        self.jobs.submit("scan", work, on_done=lambda stats: self.start_index(), front=True)
+
+    def _on_app_state(self, state):
+        """Coming back to Fotohaus (e.g. after copying pictures in Finder) picks up new files quickly."""
+        if state == Qt.ApplicationState.ApplicationActive and list(self.lib.roots()):
+            if time.time() - getattr(self, "_last_scan_request", 0) > 20:
+                self.start_scan(manual=False)
 
     def start_index(self):
         def work(job):
@@ -1851,7 +1866,7 @@ class MainWindow(QMainWindow):
     def open_settings(self, tab=0):
         from .manage import OptionsDialog
         dlg = OptionsDialog(self.lib, self)
-        dlg.rescan.connect(self.start_scan)
+        dlg.rescan.connect(lambda *_: self.start_scan())
         dlg.reindex.connect(self._reindex_all)
         dlg.download_clip.connect(lambda: self.download_clip(dlg))
         dlg.folder_manager.connect(self.folder_manager)

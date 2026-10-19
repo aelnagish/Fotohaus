@@ -149,7 +149,10 @@ class Library:
 
     # ------------------------------------------------------------ scanning
     def scan(self, progress: Callable[[str, int], None] | None = None,
-             should_stop: Callable[[], bool] | None = None, root_ids: Iterable[int] | None = None) -> dict:
+             should_stop: Callable[[], bool] | None = None, root_ids: Iterable[int] | None = None,
+             include_once: bool = False) -> dict:
+        """Find new, changed and removed files. "Scan once" folders are only rescanned when
+        `include_once` is set (an explicit Rescan Now) or when they have never been scanned."""
         stats = {"folders": 0, "new": 0, "updated": 0, "removed": 0}
         skip = set(self.settings.get("skip_folder_names") or [])
         all_roots = self.roots()
@@ -159,7 +162,8 @@ class Library:
             ids = set(root_ids)
             roots = [r for r in all_roots if r["id"] in ids and r["kind"] != "exclude"]
         else:
-            roots = [r for r in all_roots if r["kind"] != "exclude" and not (r["kind"] == "once" and r["last_scan"])]
+            roots = [r for r in all_roots if r["kind"] != "exclude"
+                     and (include_once or not (r["kind"] == "once" and r["last_scan"]))]
 
         def is_excluded(p):
             return any(p == e or p.startswith(e + os.sep) for e in excluded)

@@ -49,7 +49,7 @@ class JobManager(QObject):
         self.queue: list[Job] = []
         self.current: Job | None = None
 
-    def submit(self, name: str, fn, on_done=None, on_fail=None, dedupe=True) -> Job:
+    def submit(self, name: str, fn, on_done=None, on_fail=None, dedupe=True, front=False) -> Job:
         if dedupe:
             if self.current and self.current.name == name:
                 return self.current
@@ -63,7 +63,10 @@ class JobManager(QObject):
         if on_fail:
             job.failed.connect(on_fail)
         job.finished.connect(self._next)
-        self.queue.append(job)
+        if front:
+            self.queue.insert(0, job)
+        else:
+            self.queue.append(job)
         if self.current is None:
             self._next()
         return job

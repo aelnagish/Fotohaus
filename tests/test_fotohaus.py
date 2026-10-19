@@ -216,6 +216,28 @@ def test_mcp_server():
     assert "photos" in json.loads(lines[2]["result"]["content"][0]["text"])
 
 
+def test_rescan_picks_up_new_pictures():
+    """New files in a watched folder appear on rescan; "scan once" folders need a manual rescan."""
+    from PIL import Image
+    lib, root, _ = _make_library()
+    before = lib.counts()["photos"]
+    Image.new("RGB", (64, 48), (10, 120, 200)).save(root / "A" / "added_later.jpg")
+    lib.scan()
+    assert lib.photo_by_path(str(root / "A" / "added_later.jpg")) is not None
+    assert lib.counts()["photos"] == before + 1
+    # a folder that was only opened once (e.g. a photo double-clicked in Finder)
+    once = root.parent / (root.name + "_once")
+    once.mkdir()
+    Image.new("RGB", (64, 48), (200, 20, 20)).save(once / "first.jpg")
+    rid = lib.add_root(str(once), kind="once")
+    lib.scan(root_ids=[rid])
+    Image.new("RGB", (64, 48), (20, 200, 20)).save(once / "second.jpg")
+    lib.scan()
+    assert lib.photo_by_path(str(once / "second.jpg")) is None          # automatic scans skip it
+    lib.scan(include_once=True)
+    assert lib.photo_by_path(str(once / "second.jpg")) is not None      # Rescan Now finds it
+
+
 def test_fileops_and_metadata():
     from fotohaus import fileops
     from fotohaus.picasa.ini import PicasaIni
