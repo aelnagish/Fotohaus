@@ -4,7 +4,8 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QCompleter, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
-                               QListWidgetItem, QPushButton, QTabWidget, QToolButton, QVBoxLayout, QWidget)
+                               QListWidgetItem, QPushButton, QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout,
+                               QWidget)
 
 from . import theme
 from .infopanel import InfoPanel
@@ -253,24 +254,123 @@ class PlacesPanel(QWidget):
         self.refresh()
 
 
-class RightPanel(QTabWidget):
-    """Properties / Tags / People / Places, switchable like Picasa's panel buttons."""
+class Segmented(QWidget):
+    """A macOS-style segmented control: equal segments on a rounded track, the current one raised."""
+    changed = Signal(int)
+
+    def __init__(self, labels, parent=None):
+        super().__init__(parent)
+        self.labels = list(labels)
+        self.index = 0
+        self._hover = -1
+        self.setMouseTracking(True)
+        self.setFixedHeight(28)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def set_index(self, i):
+        if 0 <= i < len(self.labels) and i != self.index:
+            self.index = i
+            self.update()
+            self.changed.emit(i)
+
+    def _seg_at(self, x):
+        w = self.width() / max(1, len(self.labels))
+        return min(len(self.labels) - 1, max(0, int(x // w)))
+
+    def mousePressEvent(self, e):
+        self.set_index(self._seg_at(e.position().x()))
+
+    def mouseMoveEvent(self, e):
+        h = self._seg_at(e.position().x())
+        if h != self._hover:
+            self._hover = h
+            self.update()
+
+    def leaveEvent(self, e):
+        self._hover = -1
+        self.update()
+
+    def paintEvent(self, e):
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QColor, QPainter
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        dark = theme.is_dark()
+        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#2f3034" if dark else "#e4e6ea"))
+        p.drawRoundedRect(track, 8, 8)
+        n = len(self.labels)
+        w = (track.width() - 4) / n
+        # separators between unselected segments
+        p.setPen(QColor("#45464b" if dark else "#cfd2d8"))
+        for i in range(1, n):
+            if i not in (self.index, self.index + 1):
+                x = track.left() + 2 + i * w
+                p.drawLine(int(x), int(track.top() + 7), int(x), int(track.bottom() - 7))
+        if 0 <= self._hover < n and self._hover != self.index:
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(255, 255, 255, 18) if dark else QColor(0, 0, 0, 12))
+            p.drawRoundedRect(QRectF(track.left() + 2 + self._hover * w, track.top() + 2, w, track.height() - 4), 6, 6)
+        sel = QRectF(track.left() + 2 + self.index * w, track.top() + 2, w, track.height() - 4)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 30))
+        p.drawRoundedRect(sel.translated(0, 0.8), 6, 6)
+        p.setBrush(QColor("#5a5b60" if dark else "#ffffff"))
+        p.drawRoundedRect(sel, 6, 6)
+        f = self.font()
+        for i, lab in enumerate(self.labels):
+            f.setBold(i == self.index)
+            p.setFont(f)
+            p.setPen(theme.fg())
+            p.drawText(QRectF(track.left() + 2 + i * w, track.top(), w, track.height()), Qt.AlignCenter, lab)
+        p.end()
+
+
+class RightPanel(QWidget):
+    """Info / Tags / People / Places, switched with a segmented control like Picasa's panel buttons."""
+    currentChanged = Signal(int)
 
     def __init__(self, lib, loader, parent=None):
         super().__init__(parent)
-        self.setObjectName("InfoPanel")
+        self.setObjectName("RightPanel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setMinimumWidth(270)
         self.setMaximumWidth(360)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        self.seg = Segmented(["Info", "Tags", "People", "Places"])
+        holder = QWidget()
+        hl = QHBoxLayout(holder)
+        hl.setContentsMargins(12, 10, 12, 4)
+        hl.addWidget(self.seg)
+        v.addWidget(holder)
+        self.stack = QStackedWidget()
+        v.addWidget(self.stack, 1)
         self.info = InfoPanel(lib, loader)
         self.tags = TagsPanel(lib)
         self.people = SelectionPeoplePanel(lib)
         self.places = PlacesPanel(lib, loader)
-        self.addTab(self.info, "Info")
-        self.addTab(self.tags, "Tags")
-        self.addTab(self.people, "People")
-        self.addTab(self.places, "Places")
+        for w in (self.info, self.tags, self.people, self.places):
+            self.stack.addWidget(w)
+        self.seg.changed.connect(self.setCurrentIndex)
         self.ids: list[int] = []
-        self.currentChanged.connect(lambda _: self._push())
+
+    # QTabWidget-compatible bits used by the main window
+    def setCurrentIndex(self, i):
+        if self.stack.currentIndex() != i:
+            self.stack.setCurrentIndex(i)
+            self.seg.set_index(i)
+            self.currentChanged.emit(i)
+            self._push()
+
+    def currentIndex(self):
+        return self.stack.currentIndex()
+
+    def currentWidget(self):
+        return self.stack.currentWidget()
 
     def set_ids(self, ids):
         self.ids = list(ids)
