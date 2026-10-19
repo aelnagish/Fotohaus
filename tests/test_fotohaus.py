@@ -326,6 +326,79 @@ def test_viewer_helpers():
     assert r is not None and r["star"] == 1 and r["rotate"] == 1
 
 
+def test_memories_archive_private_deleted_stacks_places():
+    import datetime as dt
+    import time as _time
+    import piexif
+    import cv2
+    from fotohaus.library import Library
+    from fotohaus import geocode
+    root = Path(tempfile.mkdtemp(prefix="lib2-"))
+    (root / "Trip").mkdir()
+    today = dt.date.today()
+    last_year = today.replace(year=today.year - 2, day=min(today.day, 28))
+
+    def shot(name, when, seed, gps=None, camera=b"iPhone 15"):
+        ex = {"0th": {piexif.ImageIFD.Make: b"Apple", piexif.ImageIFD.Model: camera},
+              "Exif": {piexif.ExifIFD.DateTimeOriginal: when.strftime("%Y:%m:%d %H:%M:%S").encode()}, "GPS": {}}
+        if gps:
+            def dms(v):
+                v = abs(v); d = int(v); m = int((v - d) * 60); s_ = round(((v - d) * 60 - m) * 60 * 100)
+                return ((d, 1), (m, 1), (s_, 100))
+            ex["GPS"] = {piexif.GPSIFD.GPSLatitudeRef: b"N", piexif.GPSIFD.GPSLatitude: dms(gps[0]),
+                         piexif.GPSIFD.GPSLongitudeRef: b"E", piexif.GPSIFD.GPSLongitude: dms(gps[1])}
+        _img(320, 240, seed).save(root / "Trip" / name, quality=88, exif=piexif.dump(ex))
+
+    base = dt.datetime.combine(last_year, dt.time(12, 0, 0))
+    shot("memory.jpg", base, 1, gps=(46.0207, 7.7491))
+    shot("live.jpg", base + dt.timedelta(hours=1), 2)
+    vw = cv2.VideoWriter(str(root / "Trip" / "live.mov"), cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 120))
+    for i in range(15):
+        vw.write(np.full((120, 160, 3), i * 10, np.uint8))
+    vw.release()
+    for i in range(4):                                   # a burst: 4 shots 0.5 s apart
+        shot(f"burst_{i}.jpg", base + dt.timedelta(hours=2, seconds=i * 0.5), 10 + i, camera=b"Burst Cam")
+    shot("old.jpg", base - dt.timedelta(days=60), 5)
+    lib = Library(Path(tempfile.mkdtemp()) / "lib.db")
+    lib.add_root(str(root))
+    lib.scan()
+    names = {r["filename"]: r for r in lib.db.q("SELECT * FROM photos")}
+    # stacks: live.mov is hidden behind live.jpg, the burst collapses to one cover with a count of 4
+    assert names["live.jpg"]["live_video"].endswith("live.mov") and names["live.mov"]["stack_member"] == 1
+    covers = [r for r in names.values() if r["stack_kind"] == "burst" and r["stack_member"] == 0]
+    assert len(covers) == 1 and covers[0]["stack_count"] == 4
+    visible = {r["filename"] for r in lib.all_photos()}
+    assert "live.mov" not in visible and sum(f.startswith("burst_") for f in visible) == 1
+    assert len(lib.stack_members(covers[0]["stack_key"])) == 4
+    # memories: everything from around this day two years ago, not the photo two months earlier
+    mem = {r["filename"] for r in lib.memories()}
+    assert "memory.jpg" in mem and "old.jpg" not in mem
+    # places, offline
+    assert geocode.label(46.0207, 7.7491) == "Zermatt, Switzerland"
+    assert "Zermatt" in (lib.photo(names["memory.jpg"]["id"])["place_name"] or "")
+    from fotohaus.search import search
+    assert [r["filename"] for r in search(lib, "place:zermatt", semantic=False)] == ["memory.jpg"]
+    # archive / private / recently deleted
+    mid, oid = names["memory.jpg"]["id"], names["old.jpg"]["id"]
+    lib.set_archived([mid], True)
+    assert mid not in {r["id"] for r in lib.all_photos()} and mid in {r["id"] for r in lib.archived_photos()}
+    lib.set_archived([mid], False)
+    lib.set_private([mid], True)
+    assert mid not in {r["id"] for r in search(lib, "zermatt", semantic=False)}
+    assert mid in {r["id"] for r in lib.private_photos()}
+    lib.soft_delete([oid])
+    assert os.path.exists(names["old.jpg"]["path"]) and oid in {r["id"] for r in lib.deleted_photos()}
+    assert oid not in {r["id"] for r in lib.all_photos()}
+    lib.restore_deleted([oid])
+    assert oid in {r["id"] for r in lib.all_photos()}
+    lib.soft_delete([oid])
+    lib.db.x("UPDATE photos SET deleted=? WHERE id=?", (_time.time() - 31 * 86400, oid))
+    assert lib.purge_deleted(older_than_days=30) == 1 and not os.path.exists(names["old.jpg"]["path"])
+    # nested tags: a parent tag finds its children
+    lib.add_keyword([names["live.jpg"]["id"]], "Trips/2024/Alps")
+    assert [r["filename"] for r in search(lib, "tag:Trips/2024", semantic=False)] == ["live.jpg"]
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):

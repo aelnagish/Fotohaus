@@ -22,6 +22,8 @@ upstream package ships them):
 | PyObjC | MIT |
 | CLIP ViT-B/32 (optional download, not bundled) | MIT (OpenAI) |
 | Map tiles (loaded at runtime, not bundled) | © OpenStreetMap contributors, ODbL |
+| Place names (bundled, `fotohaus/data/`) | GeoNames (geonames.org), CC BY 4.0 |
+| PyObjC LocalAuthentication (Touch ID) | MIT |
 
 No code, icons, images or text from Picasa are included. Picasa compatibility is
 implemented from public, community documentation of the `.picasa.ini` format.

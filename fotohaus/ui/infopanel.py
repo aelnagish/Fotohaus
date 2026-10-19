@@ -394,8 +394,16 @@ class InfoPanel(QScrollArea):
         if r["exposure"]:
             self._detail("Exposure", r["exposure"])
         self._detail("Folder", os.path.basename(os.path.dirname(r["path"])) or os.path.dirname(r["path"]), True)
+        keys = r.keys()
         if r["lat"] is not None:
+            place = r["place_name"] if "place_name" in keys else None
+            if place:
+                self._detail("Place", place, True)
             self._detail("Location", f"{r['lat']:.4f}, {r['lon']:.4f}", True)
+        if "stack_count" in keys and (r["stack_count"] or 0) > 1:
+            kind = r["stack_kind"]
+            self._detail("Stack", {"live": "Live Photo", "raw": "RAW + JPEG", "burst": f"Burst of {r['stack_count']}"}
+                         .get(kind, f"{r['stack_count']} versions"))
         self.loc_btn.setVisible(r["lat"] is not None)
 
         faces = self.lib.faces_for_photo(pid)

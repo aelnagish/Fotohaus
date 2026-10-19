@@ -14,7 +14,7 @@ import datetime as _dt
 import re
 import shlex
 
-_TEXT_FIELDS = ("p.filename", "p.caption", "p.keywords", "p.camera", "p.ocr", "f.name", "f.path")
+_TEXT_FIELDS = ("p.filename", "p.caption", "p.keywords", "p.camera", "p.ocr", "f.name", "f.path", "p.place_name")
 
 
 def _date(s: str, end: bool = False) -> float | None:
@@ -76,6 +76,8 @@ def build_query(q: str) -> tuple[str, list, list[str]]:
                 cargs = [like]
             elif key == "folder":
                 clause, cargs = "(f.name LIKE ? OR f.path LIKE ?)", [like, like]
+            elif key in ("place", "where", "in"):
+                clause, cargs = "(p.place_name LIKE ? OR f.place LIKE ?)", [like, like]
             elif key == "camera":
                 clause, cargs = "p.camera LIKE ?", [like]
             elif key in ("tag", "keyword"):
@@ -102,7 +104,8 @@ def build_query(q: str) -> tuple[str, list, list[str]]:
                 v = val.lower()
                 clause = {"starred": "p.star=1", "star": "p.star=1", "video": "p.kind='video'",
                           "raw": "p.kind='raw'", "photo": "p.kind!='video'", "edited": "p.filters!=''",
-                          "hidden": "p.hidden=1"}.get(v)
+                          "hidden": "p.hidden=1", "live": "p.stack_kind='live'",
+                          "archived": "p.archived=1"}.get(v)
             elif key == "has":
                 v = val.lower()
                 clause = {"faces": "EXISTS(SELECT 1 FROM faces fc WHERE fc.photo_id=p.id AND fc.ignored=0)",
@@ -132,7 +135,10 @@ def search(lib, q: str, limit: int = 5000, semantic: bool = True) -> list:
     where, args, words = build_query(q)
     rows = lib.db.q(
         f"SELECT p.* FROM photos p JOIN folders f ON f.id=p.folder_id WHERE {where} "
-        f"{'AND p.hidden=0' if 'is:hidden' not in q else ''} ORDER BY p.taken DESC LIMIT ?", args + [limit])
+        f"{'AND p.hidden=0' if 'is:hidden' not in q else ''} "
+        f"AND COALESCE(p.private,0)=0 AND p.deleted IS NULL "
+        f"{'AND COALESCE(p.archived,0)=0' if 'is:archived' not in q else ''} "
+        f"ORDER BY p.taken DESC LIMIT ?", args + [limit])
     rows = list(rows)
     if semantic and words and lib.settings.get("clip_enabled"):
         try:

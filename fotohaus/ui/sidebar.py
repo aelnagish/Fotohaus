@@ -78,6 +78,8 @@ class Sidebar(QTreeWidget):
         c = self.lib.counts()
         sec = self._section("Library")
         self._item(sec, "All Photos", "all", None, "library")
+        if c["memories"]:
+            self._item(sec, "Memories", "memories", None, "memories", c["memories"])
         self._item(sec, "Starred", "starred", None, "star-outline", c["starred"])
         if c["videos"]:
             self._item(sec, "Videos", "videos", None, "video", c["videos"])
@@ -87,6 +89,12 @@ class Sidebar(QTreeWidget):
         self._item(sec, "Duplicates", "dupes", None, "dupes")
         if c["hidden"]:
             self._item(sec, "Hidden", "hidden", None, "eye-off", c["hidden"])
+        if c["archived"]:
+            self._item(sec, "Archive", "archived", None, "archive", c["archived"])
+        if c["private"]:
+            self._item(sec, "Private", "private", None, "lock")
+        if c["deleted"]:
+            self._item(sec, "Recently Deleted", "deleted", None, "trash", c["deleted"])
         sec = self._section("Albums")
         for a in self.lib.albums():
             it = self._item(sec, a["name"], "album", a["id"], "album", a["n"])
@@ -125,7 +133,8 @@ class Sidebar(QTreeWidget):
             self.select(*cur)
 
     def _folder_item(self, parent, f, label=None):
-        it = self._item(parent, label or f["name"], "folder", f["id"], "folder", f["count"])
+        n = f["shown"] if "shown" in f.keys() else f["count"]
+        it = self._item(parent, label or f["name"], "folder", f["id"], "folder", n)
         it.setFlags(it.flags() | Qt.ItemIsDropEnabled)
         if f["hidden"]:
             it.setForeground(0, QColor("#8c8f96"))     # readable in light and dark

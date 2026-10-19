@@ -117,6 +117,20 @@ def main(argv=None) -> int:
     # photo opens straight into the viewer instead of the full library.
     QTimer.singleShot(350, decide)
 
+    def housekeeping():
+        """Empty Recently Deleted items older than 30 days; group stacks and name places once for
+        libraries made before those features existed."""
+        try:
+            lib.purge_deleted(older_than_days=30)
+            if lib.db.scalar("SELECT value FROM meta WHERE key='stacks_v1'") is None:
+                lib.rebuild_stacks()
+                lib.db.x("INSERT OR REPLACE INTO meta(key, value) VALUES('stacks_v1', '1')")
+            if lib.update_place_names():
+                lib.emit("library")
+        except Exception:
+            pass
+    QTimer.singleShot(4000, housekeeping)
+
     quit_ms = os.environ.get("FOTOHAUS_AUTOQUIT_MS")  # used by automated launch tests
     if quit_ms:
         def _done():

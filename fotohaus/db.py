@@ -55,6 +55,15 @@ MIGRATIONS = [
     "ALTER TABLE albums ADD COLUMN place TEXT DEFAULT ''",
     "ALTER TABLE albums ADD COLUMN date REAL",
     "ALTER TABLE people ADD COLUMN email TEXT DEFAULT ''",
+    "ALTER TABLE photos ADD COLUMN archived INTEGER DEFAULT 0",
+    "ALTER TABLE photos ADD COLUMN private INTEGER DEFAULT 0",
+    "ALTER TABLE photos ADD COLUMN deleted REAL",
+    "ALTER TABLE photos ADD COLUMN stack_key TEXT",
+    "ALTER TABLE photos ADD COLUMN stack_member INTEGER DEFAULT 0",
+    "ALTER TABLE photos ADD COLUMN stack_count INTEGER DEFAULT 0",
+    "ALTER TABLE photos ADD COLUMN stack_kind TEXT DEFAULT ''",
+    "ALTER TABLE photos ADD COLUMN live_video TEXT DEFAULT ''",
+    "ALTER TABLE photos ADD COLUMN place_name TEXT",
 ]
 
 

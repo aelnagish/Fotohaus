@@ -37,7 +37,7 @@ from fotohaus import __version__  # noqa: E402
 PYVER = "3.12"
 BUNDLE_ID = "app.fotohaus.Fotohaus"
 MIN_MACOS = "14.0"
-REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av", "pyobjc-framework-UniformTypeIdentifiers", "numpy", "pillow", "pillow-heif", "opencv-python-headless", "piexif",
+REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av", "pyobjc-framework-UniformTypeIdentifiers", "pyobjc-framework-LocalAuthentication", "numpy", "pillow", "pillow-heif", "opencv-python-headless", "piexif",
                 "onnxruntime", "tokenizers", "rawpy", "pyobjc-core", "pyobjc-framework-Cocoa",
                 "pyobjc-framework-Quartz", "pyobjc-framework-Vision"]
 

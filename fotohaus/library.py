@@ -190,6 +190,11 @@ class Library:
                     self._delete_folder(f["id"])
                     stats["removed"] += 1
             self.db.x("UPDATE roots SET last_scan=? WHERE id=?", (time.time(), root["id"]))
+        try:
+            self.rebuild_stacks()
+            self.update_place_names()
+        except Exception:
+            pass
         self.emit("library")
         return stats
 
@@ -398,6 +403,14 @@ class Library:
     def photo(self, pid: int):
         return self.db.one("SELECT * FROM photos WHERE id=?", (pid,))
 
+    # ------------------------------------------------------------------ what the library shows
+    def vis(self, a: str = "p", stacks: bool = True) -> str:
+        """SQL for 'normally visible': not archived, private, recently deleted or hidden inside a stack."""
+        v = (f"COALESCE({a}.archived,0)=0 AND COALESCE({a}.private,0)=0 AND {a}.deleted IS NULL")
+        if stacks and self.settings.get("stack_photos", True) is not False:
+            v += f" AND COALESCE({a}.stack_member,0)=0"
+        return v
+
     def photo_by_path(self, path: str):
         return self.db.one("SELECT * FROM photos WHERE path=?", (os.path.abspath(path),))
 
@@ -416,8 +429,9 @@ class Library:
         rev = bool(self.settings.get("folder_sort_reverse"))
         order = {"date": "date DESC, name", "name": "name COLLATE NOCASE", "recent": "id DESC",
                  "size": "(SELECT COALESCE(SUM(size),0) FROM photos WHERE folder_id=folders.id) DESC"}.get(sort, "date DESC")
-        rows = self.db.q(f"SELECT * FROM folders WHERE count > 0 {'' if include_hidden else 'AND hidden=0'} "
-                         f"ORDER BY {order}")
+        rows = self.db.q(f"SELECT folders.*, (SELECT COUNT(*) FROM photos p WHERE p.folder_id=folders.id "
+                         f"AND {self.vis()}) AS shown FROM folders WHERE count > 0 "
+                         f"{'' if include_hidden else 'AND hidden=0'} ORDER BY {order}")
         return list(reversed(rows)) if rev else rows
 
     def set_folder_hidden(self, fid: int, hidden: bool) -> None:
@@ -429,13 +443,13 @@ class Library:
 
     def photos_in_folder(self, fid: int, include_hidden=False):
         h = "" if include_hidden else "AND hidden=0"
-        return self.db.q(f"SELECT * FROM photos p WHERE folder_id=? {h} {self._order()}", (fid,))
+        return self.db.q(f"SELECT * FROM photos p WHERE folder_id=? {h} AND {self.vis()} {self._order()}", (fid,))
 
     def all_photos(self, where: str = "1", args=(), include_hidden=False):
         h = "" if include_hidden or self.settings.get("show_hidden") else "AND p.hidden=0 AND f.hidden=0"
         order = {f["id"]: i for i, f in enumerate(self.folders())}
         rows = self.db.q(f"SELECT p.* FROM photos p JOIN folders f ON f.id=p.folder_id WHERE ({where}) {h} "
-                         f"{self._order()}", args)
+                         f"AND {self.vis()} {self._order()}", args)
         return sorted(rows, key=lambda r: order.get(r["folder_id"], 1 << 30))
 
     def photos_by_ids(self, ids: list[int]):
@@ -449,36 +463,198 @@ class Library:
         return [rows[i] for i in ids if i in rows]
 
     def starred(self):
-        return self.db.q("SELECT * FROM photos WHERE star=1 AND hidden=0 ORDER BY taken DESC")
+        return self.db.q(f"SELECT * FROM photos p WHERE star=1 AND hidden=0 AND {self.vis()} ORDER BY taken DESC")
 
     def videos(self):
-        return self.db.q("SELECT * FROM photos WHERE kind='video' AND hidden=0 ORDER BY taken DESC")
+        return self.db.q(f"SELECT * FROM photos p WHERE kind='video' AND hidden=0 AND {self.vis()} ORDER BY taken DESC")
 
     def hidden(self):
-        return self.db.q("SELECT * FROM photos WHERE hidden=1 ORDER BY taken DESC")
+        return self.db.q(f"SELECT * FROM photos p WHERE hidden=1 AND {self.vis()} ORDER BY taken DESC")
 
     def recent(self, days: int = 30):
-        return self.db.q("SELECT * FROM photos WHERE added > ? AND hidden=0 ORDER BY added DESC, taken DESC",
+        return self.db.q(f"SELECT * FROM photos p WHERE added > ? AND hidden=0 AND {self.vis()} "
+                         "ORDER BY added DESC, taken DESC",
                          (time.time() - days * 86400,))
 
     def unplaced(self):
-        return self.db.q("SELECT * FROM photos WHERE lat IS NULL AND hidden=0 ORDER BY taken DESC")
+        return self.db.q(f"SELECT * FROM photos p WHERE lat IS NULL AND hidden=0 AND {self.vis()} ORDER BY taken DESC")
 
     def geotagged(self):
-        return self.db.q("SELECT * FROM photos WHERE lat IS NOT NULL AND hidden=0 ORDER BY taken")
+        return self.db.q(f"SELECT * FROM photos p WHERE lat IS NOT NULL AND hidden=0 AND {self.vis()} ORDER BY taken")
 
     def counts(self) -> dict:
+        v = self.vis()
         return {
-            "photos": self.db.scalar("SELECT COUNT(*) FROM photos WHERE kind!='video'", default=0),
-            "videos": self.db.scalar("SELECT COUNT(*) FROM photos WHERE kind='video'", default=0),
-            "starred": self.db.scalar("SELECT COUNT(*) FROM photos WHERE star=1", default=0),
+            "photos": self.db.scalar(f"SELECT COUNT(*) FROM photos p WHERE kind!='video' AND {v}", default=0),
+            "videos": self.db.scalar(f"SELECT COUNT(*) FROM photos p WHERE kind='video' AND {v}", default=0),
+            "starred": self.db.scalar(f"SELECT COUNT(*) FROM photos p WHERE star=1 AND {v}", default=0),
             "folders": self.db.scalar("SELECT COUNT(*) FROM folders WHERE count>0", default=0),
             "albums": self.db.scalar("SELECT COUNT(*) FROM albums", default=0),
             "people": self.db.scalar("SELECT COUNT(*) FROM people WHERE name!='' AND hidden=0", default=0),
             "faces": self.db.scalar("SELECT COUNT(*) FROM faces WHERE ignored=0", default=0),
-            "geotagged": self.db.scalar("SELECT COUNT(*) FROM photos WHERE lat IS NOT NULL", default=0),
-            "hidden": self.db.scalar("SELECT COUNT(*) FROM photos WHERE hidden=1", default=0),
+            "geotagged": self.db.scalar(f"SELECT COUNT(*) FROM photos p WHERE lat IS NOT NULL AND {v}", default=0),
+            "hidden": self.db.scalar(f"SELECT COUNT(*) FROM photos p WHERE hidden=1 AND {v}", default=0),
+            "archived": self.db.scalar("SELECT COUNT(*) FROM photos WHERE archived=1 AND deleted IS NULL "
+                                       "AND COALESCE(private,0)=0", default=0),
+            "private": self.db.scalar("SELECT COUNT(*) FROM photos WHERE private=1 AND deleted IS NULL", default=0),
+            "deleted": self.db.scalar("SELECT COUNT(*) FROM photos WHERE deleted IS NOT NULL", default=0),
+            "memories": len(self.memories()),
         }
+
+    # ------------------------------------------------------------------ Memories ("On this day")
+    def memories(self, window_days: int = 3, today: _dt.date | None = None):
+        """Photos taken around today's date in earlier years, newest year first."""
+        today = today or _dt.date.today()
+        rows = self.db.q(f"SELECT * FROM photos p WHERE taken > 0 AND hidden=0 AND {self.vis()} "
+                         f"AND kind!='video' AND CAST(strftime('%Y', taken, 'unixepoch', 'localtime') AS INTEGER) < ?",
+                         (today.year,))
+        out = []
+        for r in rows:
+            d = _dt.datetime.fromtimestamp(r["taken"]).date()
+            try:
+                same = d.replace(year=today.year)
+            except ValueError:                      # 29 February
+                same = d.replace(year=today.year, day=28)
+            if abs((same - today).days) <= window_days:
+                out.append(r)
+        out.sort(key=lambda r: (-_dt.datetime.fromtimestamp(r["taken"]).year, r["taken"]))
+        return out
+
+    # ------------------------------------------------------------------ Archive / Private / Recently Deleted
+    def set_archived(self, ids: Iterable[int], on: bool) -> None:
+        ids = list(ids)
+        self._set_flag("archived", ids, int(bool(on)))
+
+    def set_private(self, ids: Iterable[int], on: bool) -> None:
+        self._set_flag("private", list(ids), int(bool(on)))
+
+    def _set_flag(self, col: str, ids: list[int], val) -> None:
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            self.db.x(f"UPDATE photos SET {col}=? WHERE id IN ({','.join('?' * len(chunk))})", [val] + chunk)
+        self.emit("library")
+
+    def archived_photos(self):
+        return self.db.q("SELECT * FROM photos WHERE archived=1 AND deleted IS NULL AND COALESCE(private,0)=0 "
+                         "ORDER BY taken DESC")
+
+    def private_photos(self):
+        return self.db.q("SELECT * FROM photos WHERE private=1 AND deleted IS NULL ORDER BY taken DESC")
+
+    def deleted_photos(self):
+        return self.db.q("SELECT * FROM photos WHERE deleted IS NOT NULL ORDER BY deleted DESC")
+
+    def soft_delete(self, ids: Iterable[int]) -> int:
+        """Move to Recently Deleted: hidden everywhere, the file stays put until it's purged (30 days)."""
+        ids = list(ids)
+        self._set_flag("deleted", ids, time.time())
+        return len(ids)
+
+    def restore_deleted(self, ids: Iterable[int]) -> None:
+        self._set_flag("deleted", list(ids), None)
+
+    def purge_deleted(self, ids: Iterable[int] | None = None, older_than_days: float | None = None) -> int:
+        """Move recently deleted photos to the macOS Trash for good."""
+        if ids is None:
+            cut = time.time() - (older_than_days if older_than_days is not None else 30) * 86400
+            ids = [r["id"] for r in self.db.q("SELECT id FROM photos WHERE deleted IS NOT NULL AND deleted < ?",
+                                              (cut,))]
+        ids = list(ids)
+        # a stack goes together: deleting the cover also removes its RAW / Live partners
+        extra = []
+        for r in self.photos_by_ids(ids):
+            if r["stack_key"] and r["stack_count"]:
+                extra += [m["id"] for m in self.db.q("SELECT id FROM photos WHERE stack_key=? AND stack_member=1",
+                                                      (r["stack_key"],))]
+        return self.move_to_trash(ids + extra) if ids else 0
+
+    # ------------------------------------------------------------------ Stacks (RAW+JPEG, bursts, Live Photos)
+    def stack_members(self, key: str):
+        return self.db.q("SELECT * FROM photos WHERE stack_key=? AND deleted IS NULL "
+                         "ORDER BY stack_member, taken, filename", (key,))
+
+    def rebuild_stacks(self, folder_ids: Iterable[int] | None = None) -> int:
+        """Group RAW+JPEG pairs, Live Photo .mov halves and bursts (3+ shots within a second)."""
+        if folder_ids is None:
+            folder_ids = [r["id"] for r in self.db.q("SELECT id FROM folders")]
+        n_stacks = 0
+        for fid in folder_ids:
+            rows = self.db.q("SELECT id, filename, kind, taken, camera, duration, star, path FROM photos "
+                             "WHERE folder_id=? AND deleted IS NULL", (fid,))
+            updates = {r["id"]: (None, 0, 0, "", "") for r in rows}   # key, member, count, kind, live
+            by_stem: dict[str, list] = {}
+            for r in rows:
+                by_stem.setdefault(os.path.splitext(r["filename"])[0].lower(), []).append(r)
+            used = set()
+            for stem, grp in by_stem.items():
+                if len(grp) < 2:
+                    continue
+                stills = [r for r in grp if r["kind"] == "photo"]
+                raws = [r for r in grp if r["kind"] == "raw"]
+                movs = [r for r in grp if r["kind"] == "video" and r["filename"].lower().endswith(".mov")
+                        and (r["duration"] or 0) <= 4.5]
+                cover = (stills or raws or [None])[0]
+                if cover is None:
+                    continue
+                key = f"{fid}:{stem}"
+                members = [r for r in grp if r is not cover and (r in raws or r in movs or r in stills)]
+                if not members:
+                    continue
+                live = movs[0]["path"] if movs and stills else ""
+                kind = "live" if live and not raws else ("raw" if raws else "pair")
+                updates[cover["id"]] = (key, 0, len(members) + 1, kind, live)
+                for m in members:
+                    updates[m["id"]] = (key, 1, 0, kind, "")
+                used.update(r["id"] for r in [cover] + members)
+                n_stacks += 1
+            # bursts: 3+ stills from the same camera, each within 1 s of the previous
+            seq = sorted((r for r in rows if r["id"] not in used and r["kind"] in ("photo", "raw") and r["taken"]),
+                         key=lambda r: (r["camera"] or "", r["taken"], r["filename"]))
+            run = []
+
+            def flush(run):
+                nonlocal n_stacks
+                if len(run) >= 3:
+                    cover = next((r for r in run if r["star"]), run[0])
+                    key = f"{fid}:burst:{run[0]['id']}"
+                    updates[cover["id"]] = (key, 0, len(run), "burst", "")
+                    for m in run:
+                        if m is not cover:
+                            updates[m["id"]] = (key, 1, 0, "burst", "")
+                    n_stacks += 1
+
+            for r in seq:
+                if run and (r["camera"] or "") == (run[-1]["camera"] or "") and r["taken"] - run[-1]["taken"] <= 1.0:
+                    run.append(r)
+                else:
+                    flush(run)
+                    run = [r]
+            flush(run)
+            with self.db.write_lock:
+                c = self.db.conn
+                c.executemany("UPDATE photos SET stack_key=?, stack_member=?, stack_count=?, stack_kind=?, "
+                              "live_video=? WHERE id=?", [v + (pid,) for pid, v in updates.items()])
+                c.commit()
+        return n_stacks
+
+    # ------------------------------------------------------------------ place names (offline)
+    def update_place_names(self, limit: int | None = None) -> int:
+        from . import geocode
+        if not geocode.available():
+            return 0
+        rows = self.db.q("SELECT id, lat, lon FROM photos WHERE lat IS NOT NULL AND place_name IS NULL"
+                         + (f" LIMIT {int(limit)}" if limit else ""))
+        cache, ups = {}, []
+        for r in rows:
+            k = (round(r["lat"], 3), round(r["lon"], 3))
+            if k not in cache:
+                cache[k] = geocode.full_label(r["lat"], r["lon"])
+            ups.append((cache[k], r["id"]))
+        if ups:
+            with self.db.write_lock:
+                self.db.conn.executemany("UPDATE photos SET place_name=? WHERE id=?", ups)
+                self.db.conn.commit()
+        return len(ups)
 
     # ------------------------------------------------------------ file-level helpers (used by the Photo Viewer)
     def describe_file(self, path: str) -> dict:
@@ -642,11 +818,12 @@ class Library:
                      write_exif: bool = True) -> None:
         ids = list(ids)
         for r in self.photos_by_ids(ids):
-            self.db.x("UPDATE photos SET lat=?, lon=? WHERE id=?", (lat, lon, r["id"]))
+            self.db.x("UPDATE photos SET lat=?, lon=?, place_name=NULL WHERE id=?", (lat, lon, r["id"]))
             if write_exif and lat is not None and self._can_write_ini(os.path.dirname(r["path"])):
                 if media.write_gps_exif(r["path"], lat, lon):
                     st = os.stat(r["path"])
                     self.db.x("UPDATE photos SET mtime=?, size=? WHERE id=?", (st.st_mtime, st.st_size, r["id"]))
+        self.update_place_names()
         self.emit("photos", ids)
 
     # ------------------------------------------------------------ albums
@@ -662,8 +839,8 @@ class Library:
         return self.db.one("SELECT * FROM albums WHERE name=? COLLATE NOCASE", (name,))
 
     def photos_in_album(self, aid: int):
-        return self.db.q("SELECT p.* FROM photos p JOIN album_photos ap ON ap.photo_id=p.id "
-                         "WHERE ap.album_id=? ORDER BY ap.position, p.taken", (aid,))
+        return self.db.q(f"SELECT p.* FROM photos p JOIN album_photos ap ON ap.photo_id=p.id "
+                         f"WHERE ap.album_id=? AND {self.vis(stacks=False)} ORDER BY ap.position, p.taken", (aid,))
 
     def create_album(self, name: str, description: str = "") -> int:
         token = secrets.token_hex(8)
@@ -743,7 +920,8 @@ class Library:
     def photos_for_person(self, person_id: int, include_suggested=False):
         c = "" if include_suggested else "AND f.confirmed=1"
         return self.db.q(f"SELECT DISTINCT p.* FROM photos p JOIN faces f ON f.photo_id=p.id "
-                         f"WHERE f.person_id=? AND f.ignored=0 {c} ORDER BY p.taken DESC", (person_id,))
+                         f"WHERE f.person_id=? AND f.ignored=0 {c} AND {self.vis(stacks=False)} "
+                         f"ORDER BY p.taken DESC", (person_id,))
 
     def faces_for_photo(self, pid: int):
         return self.db.q("SELECT f.*, pe.name AS person_name FROM faces f LEFT JOIN people pe ON pe.id=f.person_id "

@@ -200,6 +200,8 @@ class MainWindow(QMainWindow):
         self.panel = RightPanel(self.lib, self.loader)
         self.panel.info.person_clicked.connect(lambda p: self._go("person", p))
         self.panel.info.show_on_map.connect(self._show_on_map)
+        self.panel.tags.tag_search.connect(lambda t: (self.search_box.setText(f'tag:"{t}"' if " " in t else f"tag:{t}"),
+                                                      self._do_search()))
         self.panel.people.add_person.connect(self._add_person_manually)
 
         split = QSplitter()
@@ -305,6 +307,11 @@ class MainWindow(QMainWindow):
         v.addAction("Edit View", lambda: self._sel() and self.open_editor(self._sel()[0]))
         v.addAction("Slideshow", self.start_slideshow, S("Ctrl+Return"))
         v.addSeparator()
+        st = v.addAction("Stack RAW+JPEG, Bursts and Live Photos")
+        st.setCheckable(True)
+        st.setChecked(self.lib.settings.get("stack_photos", True) is not False)
+        st.toggled.connect(lambda on: (self.lib.settings.set("stack_photos", on), self._refresh_all()))
+        v.addSeparator()
         self._radio_menu(v, "Folder View", "folder_view", [("Flat (by year)", "flat"), ("Tree", "tree")],
                          self._refresh_all)
         self._radio_menu(v, "Sort Folders By", "folder_sort", [("Creation Date", "date"), ("Recent Changes", "recent"),
@@ -383,6 +390,8 @@ class MainWindow(QMainWindow):
         pi.addAction("Split Folder Here…", self.split_folder)
         pi.addSeparator()
         pi.addAction("Hide / Unhide", self.hide_selected, S("Ctrl+Shift+H"))
+        pi.addAction("Archive / Unarchive", self.archive_selected, S("Ctrl+Shift+A"))
+        pi.addAction("Move to Private / Remove from Private", self.private_selected)
         pi.addAction("Set as Desktop", self.set_desktop)
         pi.addAction("Move to Trash", self.trash_selected)
         # ---- Create
@@ -593,6 +602,12 @@ class MainWindow(QMainWindow):
             rows = lib.all_photos()
             sections = "folder"
             title = "All Photos"
+            mem = lib.memories()
+            if mem:
+                years = sorted({_dt.datetime.fromtimestamp(r["taken"]).year for r in mem}, reverse=True)
+                yrs = ", ".join(str(y) for y in years[:3]) + ("…" if len(years) > 3 else "")
+                sub = f"On this day: {len(mem)} photo{'s' if len(mem) != 1 else ''} from {yrs}"
+                self._header_btn("View Memories", lambda: self._go("memories", None))
             folder_titles = {f["id"]: {"title": f["name"], "date": f["date"],
                                        "subtitle": " · ".join(x for x in (f["place"], f["description"]) if x)}
                              for f in lib.folders(include_hidden=True)}
@@ -625,6 +640,29 @@ class MainWindow(QMainWindow):
             rows, title, sections = lib.recent(), "Recently Added", None
         elif kind == "hidden":
             rows, title = lib.hidden(), "Hidden"
+        elif kind == "memories":
+            rows, title = lib.memories(), "Memories"
+            sections = "year"
+            sub = "Photos taken around this day in earlier years."
+            self._header_btn("Play Slideshow", lambda: self.start_slideshow(from_start=True))
+        elif kind == "archived":
+            rows, title = lib.archived_photos(), "Archive"
+            sub = "Archived photos are kept out of the library, search and memories. Your files aren't touched."
+        elif kind == "private":
+            if self._unlock_private():
+                rows, title = lib.private_photos(), "Private"
+                sub = "Only visible here, after unlocking. Lock again by quitting Fotohaus."
+            else:
+                rows, title = [], "Private"
+                sub = "Locked."
+        elif kind == "deleted":
+            rows, title, sections = lib.deleted_photos(), "Recently Deleted", None
+            sub = "Items are kept for 30 days, then moved to the Mac's Trash. Your files stay in place until then."
+            self._header_btn("Restore All", lambda: (lib.restore_deleted([r["id"] for r in lib.deleted_photos()]),
+                                                     self._refresh_all()))
+            self._header_btn("Delete All Now…", lambda: self.purge_selected([r["id"] for r in lib.deleted_photos()]))
+        elif kind == "stack":
+            rows, title, sections = lib.stack_members(ident), "Stack", None
         elif kind == "person":
             p = lib.person(ident)
             rows, title = lib.photos_for_person(ident), (p["name"] if p else "")
@@ -889,16 +927,64 @@ class MainWindow(QMainWindow):
         macos.open_with([r["path"] for r in rows], None)
 
     def trash_selected(self):
+        """Delete = move to Recently Deleted (kept 30 days, restorable). In Recently Deleted it purges."""
         ids = self._sel()
         if not ids:
             return
-        if QMessageBox.question(self, "Move to Trash",
-                                f"Move {len(ids)} file{'s' if len(ids) != 1 else ''} to the Trash?") != QMessageBox.Yes:
-            return
+        if self.collection[0] == "deleted":
+            return self.purge_selected()
         if self.stack.currentIndex() == PAGE_EDITOR:
             self.close_editor()
         self.held = [i for i in self.held if i not in ids]
-        self.lib.move_to_trash(ids)
+        self.lib.soft_delete(ids)
+        self.statusBar().showMessage(f"Moved {len(ids)} item{'s' if len(ids) != 1 else ''} to Recently Deleted. "
+                                     "They're kept for 30 days.", 6000) if hasattr(self, "statusBar") else None
+        self._refresh_all()
+
+    def restore_selected(self):
+        ids = self._sel()
+        if ids:
+            self.lib.restore_deleted(ids)
+            self._refresh_all()
+
+    def purge_selected(self, ids=None):
+        ids = ids if ids is not None else self._sel()
+        if not ids:
+            return
+        if QMessageBox.question(self, "Delete Now",
+                                f"Move {len(ids)} item{'s' if len(ids) != 1 else ''} to the Mac's Trash now? "
+                                "They'll leave Fotohaus for good.") != QMessageBox.Yes:
+            return
+        self.lib.purge_deleted(ids)
+        self._refresh_all()
+
+    def archive_selected(self):
+        ids = self._sel()
+        if ids:
+            rows = self.lib.photos_by_ids(ids)
+            self.lib.set_archived(ids, not all(r["archived"] for r in rows))
+            self._refresh_all()
+
+    def private_selected(self):
+        ids = self._sel()
+        if not ids:
+            return
+        rows = self.lib.photos_by_ids(ids)
+        if all(r["private"] for r in rows):
+            if not self._unlock_private():
+                return
+            self.lib.set_private(ids, False)
+        else:
+            self.lib.set_private(ids, True)
+        self._refresh_all()
+
+    def _unlock_private(self) -> bool:
+        if getattr(self, "_private_unlocked", False):
+            return True
+        from .. import macos as _m
+        ok = _m.authenticate("show your private photos")
+        self._private_unlocked = ok
+        return ok
 
     def rename_selected(self):
         ids = self._sel()
@@ -1306,8 +1392,17 @@ class MainWindow(QMainWindow):
         m.addAction("Share…", lambda: self._tray_action("share"))
         m.addAction("Set as Desktop", self.set_desktop)
         m.addAction("Hide / Unhide", self.hide_selected)
+        m.addAction("Archive / Unarchive", self.archive_selected)
+        m.addAction("Move to Private / Remove from Private", self.private_selected)
+        first = self.lib.photo(ids[0]) if ids else None
+        if first is not None and first["stack_key"] and first["stack_count"]:
+            m.addAction(f"Show Stack ({first['stack_count']})", lambda k=first["stack_key"]: self._go("stack", k))
         m.addSeparator()
-        m.addAction("Move to Trash", self.trash_selected)
+        if self.collection[0] == "deleted":
+            m.addAction("Restore", self.restore_selected)
+            m.addAction("Delete Now…", self.purge_selected)
+        else:
+            m.addAction("Delete", self.trash_selected)
         m.exec(self.grid.viewport().mapToGlobal(pos))
 
     def _fill_open_with_into(self, menu):

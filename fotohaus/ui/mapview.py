@@ -305,7 +305,7 @@ class PlacesView(QWidget):
         self.map.enabled_tiles = bool(self.lib.settings.get("map_tiles"))
         rows = self.lib.geotagged()
         self.map.set_points(rows)
-        n_unplaced = self.lib.db.scalar("SELECT COUNT(*) FROM photos WHERE lat IS NULL AND hidden=0", default=0)
+        n_unplaced = self.lib.db.scalar(f"SELECT COUNT(*) FROM photos p WHERE lat IS NULL AND hidden=0 AND {self.lib.vis()}", default=0)
         self.info.setText(f"   {len(rows)} photos on the map · {n_unplaced} without a location")
         if fit or not self._fitted:
             self.map.fit_points()

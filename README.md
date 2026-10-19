@@ -54,7 +54,10 @@ no library to set up first. Zoom with the scroll wheel, star or rotate as you go
 ### Organize
 - Library grouped by folder and date, with stars, captions, tags and albums
 - **Photo Tray**: hold pictures from different folders and act on them together
-- Timeline and **Places** map, with geotagging by clicking the map
+- Timeline and **Places** map with real place names ("Zermatt, Switzerland"), worked out offline
+- **Memories**: "On this day" photos from earlier years, right at the top of your library
+- **Stacks**: RAW+JPEG pairs, bursts and Live Photos fold into one thumbnail
+- **Archive**, a Touch ID-locked **Private** collection, and **Recently Deleted** (30 days to change your mind)
 - Folder tools: rename, move, split, hide, batch rename, fix dates
 - Import from cameras and cards, skipping duplicates
 
@@ -66,6 +69,7 @@ no library to set up first. Zoom with the scroll wheel, star or rotate as you go
 - **Smart search** for objects, scenes and text inside photos, using Apple's on-device Vision
 - Optional natural-language search ("kids playing in the snow")
 - Duplicate and near-duplicate finder that keeps the best copy
+- Nested tags like `Trips/2024/Alps`, browsable as a tree
 
 </td>
 </tr>

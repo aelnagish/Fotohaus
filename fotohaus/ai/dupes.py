@@ -93,7 +93,8 @@ def group_duplicates(items: list[tuple[int, str]], max_distance: int = 4) -> lis
 
 
 def find_duplicates(lib, max_distance: int = 4) -> list[list]:
-    rows = lib.db.q("SELECT id, phash FROM photos WHERE phash IS NOT NULL AND phash != '' AND hidden=0")
+    rows = lib.db.q("SELECT id, phash FROM photos p WHERE phash IS NOT NULL AND phash != '' AND hidden=0 "
+                    "AND COALESCE(private,0)=0 AND deleted IS NULL AND COALESCE(stack_member,0)=0")
     groups = group_duplicates([(r["id"], r["phash"]) for r in rows], max_distance)
     out = []
     for g in groups:

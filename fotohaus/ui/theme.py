@@ -315,6 +315,36 @@ def _draw(name: str, p: QPainter, s: float, color: QColor) -> None:
         dx = s * 0.12
         p.drawLine(tip, QPointF(tip.x() + sign * dx, tip.y() - dx * 0.9))
         p.drawLine(tip, QPointF(tip.x() + sign * dx, tip.y() + dx * 0.9))
+    elif name == "archive":
+        p.drawRoundedRect(QRectF(r.left(), r.top() + s * 0.02, r.width(), s * 0.18), s * 0.03, s * 0.03)
+        p.drawRoundedRect(QRectF(r.left() + s * 0.05, r.top() + s * 0.2, r.width() - s * 0.1, r.height() - s * 0.22),
+                          s * 0.04, s * 0.04)
+        p.drawLine(QPointF(c.x() - s * 0.1, r.top() + s * 0.36), QPointF(c.x() + s * 0.1, r.top() + s * 0.36))
+    elif name == "lock":
+        body = QRectF(r.left() + s * 0.06, c.y() - s * 0.04, r.width() - s * 0.12, r.height() * 0.55)
+        p.drawRoundedRect(body, s * 0.05, s * 0.05)
+        arc = QPainterPath()
+        arc.moveTo(c.x() - s * 0.15, body.top())
+        arc.lineTo(c.x() - s * 0.15, r.top() + s * 0.16)
+        arc.arcTo(QRectF(c.x() - s * 0.15, r.top(), s * 0.3, s * 0.3), 180, -180)
+        arc.lineTo(c.x() + s * 0.15, body.top())
+        p.drawPath(arc)
+    elif name == "memories":
+        p.drawEllipse(QRectF(c.x() - s * 0.3, c.y() - s * 0.3, s * 0.6, s * 0.6))
+        p.drawLine(c, QPointF(c.x(), c.y() - s * 0.18))
+        p.drawLine(c, QPointF(c.x() + s * 0.13, c.y() + s * 0.08))
+        p.drawArc(QRectF(c.x() - s * 0.42, c.y() - s * 0.42, s * 0.84, s * 0.84), 100 * 16, 70 * 16)
+    elif name == "stack":
+        for i in range(3):
+            o = s * 0.09 * i
+            p.drawRoundedRect(QRectF(r.left() + o, r.top() + s * 0.18 - o, r.width() - s * 0.18, r.height() - s * 0.2),
+                              s * 0.04, s * 0.04)
+    elif name == "live":
+        p.drawEllipse(QRectF(c.x() - s * 0.08, c.y() - s * 0.08, s * 0.16, s * 0.16))
+        p.drawEllipse(QRectF(c.x() - s * 0.2, c.y() - s * 0.2, s * 0.4, s * 0.4))
+        pen2 = QPen(color, s * 0.075, Qt.DotLine, Qt.RoundCap)
+        p.setPen(pen2)
+        p.drawEllipse(QRectF(c.x() - s * 0.33, c.y() - s * 0.33, s * 0.66, s * 0.66))
     elif name == "trash":
         p.drawLine(QPointF(r.left() + s * 0.05, r.top() + s * 0.12), QPointF(r.right() - s * 0.05, r.top() + s * 0.12))
         p.drawLine(QPointF(c.x() - s * 0.08, r.top()), QPointF(c.x() + s * 0.08, r.top()))

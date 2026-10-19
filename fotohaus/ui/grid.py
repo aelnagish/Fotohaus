@@ -64,6 +64,12 @@ class PhotoGridModel(QAbstractListModel):
                     meta = (folder_titles or {}).get(key, {})
                     hdr = {"key": key, "title": meta.get("title") or "", "date": meta.get("date"),
                            "subtitle": meta.get("subtitle", ""), "folder_id": key}
+                elif sections == "year":          # Memories: "3 years ago · October 2023"
+                    d = _dt.datetime.fromtimestamp(r["taken"] or 0)
+                    ago = _dt.date.today().year - d.year
+                    key = d.year
+                    hdr = {"key": key, "title": f"{ago} year{'s' if ago != 1 else ''} ago", "date": None,
+                           "subtitle": d.strftime("%B %-d, %Y") if hasattr(d, "strftime") else ""}
                 else:
                     d = _dt.datetime.fromtimestamp(r["taken"] or 0)
                     key = (d.year, d.month)
@@ -262,6 +268,31 @@ class GridDelegate(QStyledItemDelegate):
             p.setFont(f)
             p.setPen(Qt.white)
             p.drawText(br, Qt.AlignCenter, "RAW")
+        keys = row.keys() if hasattr(row, "keys") else ()
+        if "stack_count" in keys and (row["stack_count"] or 0) > 1 and row["stack_kind"] != "live":
+            txt = str(row["stack_count"])
+            f = theme.scaled_font(p.font(), 0.75)
+            f.setBold(True)
+            p.setFont(f)
+            w = p.fontMetrics().horizontalAdvance(txt) + 22
+            br = QRectF(img_rect.right() - w - 4, img_rect.top() + 4, w, 16)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(0, 0, 0, 150))
+            p.drawRoundedRect(br, 8, 8)
+            theme.icon("stack", QColor("#ffffff")).paint(p, QRect(int(br.left()) + 4, int(br.top()) + 2, 12, 12))
+            p.setPen(Qt.white)
+            p.drawText(br.adjusted(16, 0, -4, 0), Qt.AlignCenter, txt)
+        if "live_video" in keys and row["live_video"]:
+            f = theme.scaled_font(p.font(), 0.7)
+            f.setBold(True)
+            p.setFont(f)
+            br = QRectF(img_rect.left() + 4, img_rect.top() + 4, 44, 16)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(0, 0, 0, 140))
+            p.drawRoundedRect(br, 8, 8)
+            theme.icon("live", QColor("#ffffff")).paint(p, QRect(int(br.left()) + 4, int(br.top()) + 2, 12, 12))
+            p.setPen(Qt.white)
+            p.drawText(br.adjusted(16, 0, -3, 0), Qt.AlignVCenter | Qt.AlignLeft, "LIVE")
         if row["id"] in self.held:
             pin = QRectF(img_rect.left() + 4, img_rect.top() + 4, 16, 16)
             p.setPen(Qt.NoPen)

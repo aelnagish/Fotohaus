@@ -18,6 +18,8 @@ def _sec(text):
 
 
 class TagsPanel(QWidget):
+    tag_search = Signal(str)          # a tag (or a parent like "Trips/2024") was double-clicked
+
     def __init__(self, lib, parent=None):
         super().__init__(parent)
         self.lib = lib
@@ -29,7 +31,7 @@ class TagsPanel(QWidget):
         v.addWidget(self.head)
         row = QHBoxLayout()
         self.entry = QLineEdit()
-        self.entry.setPlaceholderText("Type a tag and press Return")
+        self.entry.setPlaceholderText("Add a tag — use / to nest, e.g. Trips/2024")
         self.entry.returnPressed.connect(self._add)
         row.addWidget(self.entry)
         add = QToolButton()
@@ -55,7 +57,15 @@ class TagsPanel(QWidget):
         v.addLayout(qt_row)
         self.quick = QGridLayout()
         v.addLayout(self.quick)
-        v.addStretch()
+        v.addWidget(_sec("All tags"))
+        from PySide6.QtWidgets import QTreeWidget
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.setColumnCount(2)
+        self.tree.setIndentation(14)
+        self.tree.setToolTip("Double-click a tag to show its pictures (a parent tag includes everything under it)")
+        self.tree.itemDoubleClicked.connect(lambda it, _c: self.tag_search.emit(it.data(0, Qt.UserRole)))
+        v.addWidget(self.tree, 1)
         self._build_quick()
 
     def _build_quick(self):
@@ -90,13 +100,42 @@ class TagsPanel(QWidget):
                 if k:
                     counts[k] = counts.get(k, 0) + 1
         for k, n in sorted(counts.items(), key=lambda x: (-x[1], x[0].lower())):
-            it = QListWidgetItem(f"{k}" + (f"   ({n} of {len(rows)})" if n != len(rows) else ""))
+            shown = " › ".join(x.strip() for x in k.split("/") if x.strip())
+            it = QListWidgetItem(f"{shown}" + (f"   ({n} of {len(rows)})" if n != len(rows) else ""))
             it.setData(Qt.UserRole, k)
             self.list.addItem(it)
-        names = [k for k, _ in self.lib.all_keywords()]
+        allk = self.lib.all_keywords()
+        self._fill_tree(allk)
+        names = [k for k, _ in allk]
         comp = QCompleter(names, self)
         comp.setCaseSensitivity(Qt.CaseInsensitive)
         self.entry.setCompleter(comp)
+
+    def _fill_tree(self, keywords):
+        """Show nested tags (Trips/2024/Alps) as a tree, each node with the number of pictures under it."""
+        from PySide6.QtWidgets import QTreeWidgetItem
+        self.tree.clear()
+        nodes: dict[str, QTreeWidgetItem] = {}
+        totals: dict[str, int] = {}
+        for kw, n in keywords:
+            parts = [x.strip() for x in kw.split("/") if x.strip()]
+            for i in range(len(parts)):
+                key = "/".join(parts[:i + 1])
+                totals[key] = totals.get(key, 0) + n
+                if key not in nodes:
+                    parent = nodes.get("/".join(parts[:i])) if i else None
+                    it = QTreeWidgetItem([parts[i], ""])
+                    it.setData(0, Qt.UserRole, key)
+                    (parent.addChild(it) if parent else self.tree.addTopLevelItem(it))
+                    nodes[key] = it
+        for key, it in nodes.items():
+            it.setText(1, str(totals[key]))
+            it.setTextAlignment(1, Qt.AlignRight | Qt.AlignVCenter)
+        self.tree.sortItems(0, Qt.AscendingOrder)
+        self.tree.resizeColumnToContents(1)
+        from PySide6.QtWidgets import QHeaderView
+        self.tree.header().setStretchLastSection(False)
+        self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
 
     def _add(self):
         t = self.entry.text().strip()

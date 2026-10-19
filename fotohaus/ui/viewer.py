@@ -29,8 +29,23 @@ def folder_items(path: str) -> list[str]:
         names = [f for f in os.listdir(folder) if not f.startswith(".") and media.kind_of(f)]
     except OSError:
         names = [os.path.basename(path)]
+    # the short .mov half of a Live Photo is shown with its still, not as a separate item
+    stills = {os.path.splitext(n)[0].lower() for n in names if media.kind_of(n) in ("photo", "raw")}
+    names = [n for n in names if not (n.lower().endswith(".mov") and os.path.splitext(n)[0].lower() in stills)
+             or n == os.path.basename(path)]
     names.sort(key=natural_key)
     return [os.path.join(folder, n) for n in names]
+
+
+def live_partner(path: str) -> str | None:
+    """The .mov of an iPhone Live Photo saved next to the still (IMG_1234.HEIC + IMG_1234.MOV)."""
+    if media.kind_of(path) != "photo":
+        return None
+    stem = os.path.splitext(path)[0]
+    for ext in (".MOV", ".mov"):
+        if os.path.exists(stem + ext):
+            return stem + ext
+    return None
 
 
 class _Sig(QObject):
@@ -120,6 +135,7 @@ class PhotoViewer(QWidget):
         self.sig = _Sig()
         self.sig.done.connect(self._loaded)
         self.video = None
+        self.live = None
         self.orig_size = None
         self.strip_icons: dict = {}
         self.strip_sig = _StripSig()
@@ -158,15 +174,18 @@ class PhotoViewer(QWidget):
         h.addWidget(_Button("rotate-right", "Rotate clockwise (])", lambda: self.rotate(1)))
         self.b_star = _Button("star-outline", "Star (⌘8)", self.toggle_star, color=theme.STAR)
         h.addWidget(self.b_star)
-        h.addWidget(_Button("trash", "Move to Trash (⌫)", self.delete))
+        self.b_live = _Button("live", "Play Live Photo (L)", self.play_live)
+        h.addWidget(self.b_live)
+        h.addWidget(_Button("trash", "Delete (⌫)", self.delete))
         h.addSpacing(10)
         h.addWidget(_Button("info", "Info (I)", self.toggle_info))
         h.addWidget(_Button("share", "Share…", self.share))
         edit = QToolButton()
         edit.setText("Edit in Fotohaus")
         edit.setCursor(Qt.PointingHandCursor)
-        edit.setStyleSheet("QToolButton { color: white; background: #2f7de1; border: none; border-radius: 6px;"
-                           " padding: 5px 10px; margin-left: 6px; } QToolButton:hover { background: #3d8bf0; }")
+        edit.setStyleSheet(f"QToolButton {{ color: white; background: {theme.ACCENT.name()}; border: none; "
+                           f"border-radius: 6px; padding: 5px 10px; margin-left: 6px; }} "
+                           f"QToolButton:hover {{ background: {theme.ACCENT.lighter(112).name()}; }}")
         edit.clicked.connect(lambda: self.edit_requested.emit(self.items[self.i]))
         h.addWidget(edit)
         h.addWidget(_Button("close", "Close (Esc)", self.close))
@@ -232,6 +251,7 @@ class PhotoViewer(QWidget):
                         (Qt.Key_Backspace, self.delete), (Qt.Key_Delete, self.delete)):
             QShortcut(QKeySequence(key), self, fn)
         QShortcut(QKeySequence("Ctrl+8"), self, self.toggle_star)
+        QShortcut(QKeySequence(Qt.Key_L), self, self.play_live)
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)
 
     def resizeEvent(self, e):
@@ -287,6 +307,9 @@ class PhotoViewer(QWidget):
             self.strip.scrollToItem(self.strip.item(self.i))
         self._strip_window()
         self.b_star.setIcon(theme.icon("star" if self.row["star"] else "star-outline", theme.STAR))
+        self.live = live_partner(path)
+        self.b_live.setVisible(bool(self.live))
+        self.bar.adjustSize()
         kind = self.row["kind"]
         if kind == "video":
             self.img = QImage()
@@ -375,6 +398,16 @@ class PhotoViewer(QWidget):
             self.video.deleteLater()
             self.video = None
 
+    def play_live(self):
+        """Play the motion of a Live Photo; press again (or L) to go back to the still."""
+        if not getattr(self, "live", None):
+            return
+        if self.video is not None:
+            self._stop_media()
+            self.update()
+            return
+        self._start_video(self.live)
+
     def step(self, d):
         if len(self.items) > 1:
             self.show_item((self.i + d) % len(self.items))
@@ -397,13 +430,17 @@ class PhotoViewer(QWidget):
 
     def delete(self):
         path = self.items[self.i]
-        if QMessageBox.question(self, "Move to Trash", f"Move “{os.path.basename(path)}” to the Trash?") \
-                != QMessageBox.Yes:
-            return
-        self._stop_media()
         r = self.lib.photo_by_path(path)
-        from ..library import _trash
-        ok = self.lib.move_to_trash([r["id"]]) if r is not None else _trash(path)
+        if r is not None:      # library photos go to Recently Deleted (restorable for 30 days)
+            self._stop_media()
+            ok = self.lib.soft_delete([r["id"]])
+        else:
+            if QMessageBox.question(self, "Move to Trash", f"Move “{os.path.basename(path)}” to the Trash?") \
+                    != QMessageBox.Yes:
+                return
+            self._stop_media()
+            from ..library import _trash
+            ok = _trash(path)
         if ok:
             self.items.pop(self.i)
             self.show_item(min(self.i, len(self.items) - 1))

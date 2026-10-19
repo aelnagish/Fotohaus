@@ -12,3 +12,4 @@ tokenizers>=0.19
 pyobjc-framework-Vision>=10; sys_platform == "darwin"
 pyobjc-framework-Quartz>=10; sys_platform == "darwin"
 pyobjc-framework-UniformTypeIdentifiers>=10; sys_platform == "darwin"
+pyobjc-framework-LocalAuthentication>=10; sys_platform == "darwin"

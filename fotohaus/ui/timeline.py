@@ -26,7 +26,7 @@ class _Strip(QWidget):
         folders.sort(key=lambda f: f["date"])
         self.items = []
         for f in folders:
-            cover = self.lib.db.one("SELECT * FROM photos WHERE folder_id=? AND hidden=0 ORDER BY star DESC, taken "
+            cover = self.lib.db.one(f"SELECT * FROM photos p WHERE folder_id=? AND hidden=0 AND {self.lib.vis()} ORDER BY star DESC, taken "
                                     "LIMIT 1", (f["id"],))
             if cover is not None:
                 self.items.append((f, cover))

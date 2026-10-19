@@ -230,3 +230,39 @@ def screensaver_folder() -> str:
 def open_screensaver_settings() -> None:
     if IS_MAC:
         subprocess.Popen(["open", "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension"])
+
+
+# ---------------------------------------------------------------------------- Touch ID / password
+def authenticate(reason: str = "unlock") -> bool:
+    """Ask for Touch ID (or the Mac password) — used to open the Private collection.
+    Returns True on success. Off macOS there is nothing to check, so it returns True."""
+    if sys.platform != "darwin":
+        return True
+    try:
+        import threading
+        from LocalAuthentication import LAContext  # pyobjc-framework-LocalAuthentication
+    except Exception:
+        return _password_fallback(reason)
+    ctx = LAContext.alloc().init()
+    policy = 2                                  # LAPolicyDeviceOwnerAuthentication: Touch ID or password
+    ok, _err = ctx.canEvaluatePolicy_error_(policy, None)
+    if not ok:
+        return _password_fallback(reason)
+    done = threading.Event()
+    result = {"ok": False}
+
+    def reply(success, error):
+        result["ok"] = bool(success)
+        done.set()
+
+    ctx.evaluatePolicy_localizedReason_reply_(policy, f"Fotohaus wants to {reason}", reply)
+    from PySide6.QtCore import QCoreApplication, QEventLoop
+    while not done.wait(0.05):                  # keep the app responsive while the system sheet is up
+        QCoreApplication.processEvents(QEventLoop.AllEvents, 50)
+    return result["ok"]
+
+
+def _password_fallback(reason: str) -> bool:
+    from PySide6.QtWidgets import QMessageBox
+    return QMessageBox.question(None, "Private", f"Touch ID isn't available. Continue to {reason}?") == \
+        QMessageBox.Yes
