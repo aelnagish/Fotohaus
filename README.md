@@ -17,7 +17,7 @@ touching your originals, and never uploads a single pixel.
 
 ---
 
-*Fotohaus* is German for "photo house": one home for every picture you've ever taken.
+*Fotohaus*: one home for every picture you've ever taken.
 
 Point it at the folders already on your Mac, and in a few minutes years of photos are sorted,
 searchable and easy to show off. Nothing is copied into a hidden library and nothing leaves your
@@ -145,4 +145,4 @@ are in [LICENSE](LICENSE). The app also includes third-party components under th
 listed in `packaging/THIRD_PARTY_NOTICES.md`.
 
 <sub>Screenshots use freely licensed sample images from the scikit-image, imageio and Pillow
-projects. Picasa is a trademark of Google LLC; Fotohaus is an independent project.</sub>
+projects. Fotohaus is an independent project.</sub>
