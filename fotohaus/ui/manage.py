@@ -296,10 +296,13 @@ class OptionsDialog(QDialog):
         # --- Email & Slideshow
         es = _Page()
         es.heading("Slideshow")
-        self.secs = QSpinBox()
-        self.secs.setRange(1, 60)
-        self.secs.setSuffix(" seconds")
-        self.secs.setValue(int(s.get("slideshow_seconds") or 4))
+        # a drop-down like the others (the Mac's spin box is drawn wider and breaks the line)
+        self.secs = QComboBox()
+        cur_secs = int(s.get("slideshow_seconds") or 4)
+        choices = sorted({1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 60, cur_secs})
+        for n in choices:
+            self.secs.addItem(f"{n} second{'s' if n != 1 else ''}", n)
+        self.secs.setCurrentIndex(self.secs.findData(cur_secs))
         es.row("Show each photo for:", self.secs)
         self.trans = QComboBox()
         for k, label in (("dissolve", "Dissolve"), ("panzoom", "Pan and zoom"), ("wipe", "Wipe"),
@@ -427,7 +430,7 @@ class OptionsDialog(QDialog):
         s.set("vision_enabled", self.vision_cb.isChecked())
         s.set("clip_enabled", self.clip_cb.isChecked())
         s.set("email_size", self.email.currentData())
-        s.set("slideshow_seconds", self.secs.value())
+        s.set("slideshow_seconds", int(self.secs.currentData()))
         s.set("slideshow_transition", self.trans.currentData())
         s.set("slideshow_captions", self.capt.isChecked())
         s.set("button_bar", [self.btn_list.item(i).data(Qt.UserRole) for i in range(self.btn_list.count())
