@@ -51,8 +51,10 @@ def main(argv=None) -> int:
         app.setWindowIcon(QIcon(icon_path))
     from .library import get_library
     from .ui import theme
-    app.setStyleSheet(theme.stylesheet())
     lib = get_library()
+    st = lib.settings
+    theme.apply_appearance(app, st.get("theme") or "system", st.get("accent") or "system",
+                           st.get("library_bg") or "neutral")
 
     class Controller(QObject):
         def __init__(self):

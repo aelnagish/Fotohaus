@@ -67,6 +67,9 @@ def ensure_dirs() -> None:
 
 
 DEFAULT_SETTINGS = {
+    "theme": "system",               # system | light | dark
+    "accent": "system",              # system | blue | purple | pink | red | orange | yellow | green | graphite
+    "library_bg": "neutral",         # neutral | gallery
     "write_picasa_ini": True,        # keep .picasa.ini files in sync (Picasa compatibility)
     "faces_enabled": True,           # on-device face detection + recognition
     "vision_enabled": True,          # Apple Vision labels + text recognition (macOS only)

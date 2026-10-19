@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QDir, QIdentityProxyModel, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtCore import QDir, QIdentityProxyModel, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFileDialog, QFileSystemModel, QFormLayout, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
@@ -26,6 +26,91 @@ BUTTONS = [("share", "Share"), ("email", "Email"), ("print", "Print"), ("export"
 
 LABEL_W = 200     # every Options tab shares one alignment line: labels end here …
 CTRL_W = 280      # … and every control starts here, all the same width
+
+
+class ThemeTile(QPushButton):
+    """A small preview of Light / Dark / Match System with its name underneath."""
+
+    def __init__(self, key, label):
+        super().__init__()
+        self.key, self.label = key, label
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(88, 70)
+        self.setToolTip(label)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        box = QRectF(4, 3, self.width() - 8, 44)
+        light, dark = QColor("#f4f5f7"), QColor("#232427")
+        path = QPainterPath()
+        path.addRoundedRect(box, 7, 7)
+        p.save()
+        p.setClipPath(path)
+        if self.key == "system":
+            p.fillRect(QRectF(box.left(), box.top(), box.width() / 2, box.height()), light)
+            p.fillRect(QRectF(box.center().x(), box.top(), box.width() / 2, box.height()), dark)
+        else:
+            p.fillRect(box, light if self.key == "light" else dark)
+        # a tiny window: sidebar strip + three thumbnails
+        for half, col in ((0, light), (1, dark)):
+            if self.key != "system" and half == 1:
+                break
+            fg_ = QColor("#c9ccd2") if (self.key == "light" or (self.key == "system" and half == 0)) else QColor("#45474c")
+            x0 = box.left() + (box.width() / 2 if half else 0) if self.key == "system" else box.left()
+            w0 = box.width() / 2 if self.key == "system" else box.width()
+            p.fillRect(QRectF(x0 + 4, box.top() + 6, w0 * 0.22, box.height() - 12), fg_)
+            for i in range(2 if self.key == "system" else 3):
+                p.fillRect(QRectF(x0 + 6 + w0 * 0.24 + i * (w0 * 0.24), box.top() + 10, w0 * 0.18, w0 * 0.14), fg_)
+        p.restore()
+        p.setPen(QPen(theme.ACCENT if self.isChecked() else QColor(128, 128, 128, 90), 2.5 if self.isChecked() else 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(box, 7, 7)
+        f = self.font()
+        f.setPointSizeF(max(8.0, f.pointSizeF() * 0.85))
+        f.setBold(self.isChecked())
+        p.setFont(f)
+        p.setPen(theme.fg())
+        p.drawText(QRectF(0, 50, self.width(), 18), Qt.AlignCenter, self.label)
+        p.end()
+
+
+class AccentDot(QPushButton):
+    """A round colour swatch; the first one ('Match System') is a multicolour wheel."""
+
+    def __init__(self, key, label, hexcol):
+        super().__init__()
+        self.key, self.hex = key, hexcol
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(24, 24)
+        self.setToolTip(label)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def paintEvent(self, e):
+        from PySide6.QtGui import QConicalGradient
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = QRectF(4, 4, 16, 16)
+        if self.hex:
+            p.setBrush(QColor(self.hex))
+        else:
+            g = QConicalGradient(r.center(), 90)
+            for i, c in enumerate(("#2f7de1", "#7f5bd6", "#d6458f", "#e0453f", "#f08a24", "#e0b21b", "#3fa34d", "#2f7de1")):
+                g.setColorAt(i / 7, QColor(c))
+            p.setBrush(g)
+        p.setPen(QPen(QColor(0, 0, 0, 40), 0.8))
+        p.drawEllipse(r)
+        if self.isChecked():
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(theme.fg(), 2))
+            p.drawEllipse(QRectF(1, 1, 22, 22))
+            p.setBrush(QColor("white"))
+            p.setPen(Qt.NoPen)
+            p.drawEllipse(QRectF(9.5, 9.5, 5, 5))
+        p.end()
 
 
 class _Page(QWidget):
@@ -201,6 +286,48 @@ class OptionsDialog(QDialog):
         g.row("Map:", self.tiles)
         g.finish()
         tabs.addTab(g, "General")
+
+        # --- Appearance
+        ap = _Page()
+        ap.heading("Look")
+        self._saved_look = (s.get("theme") or "system", s.get("accent") or "system", s.get("library_bg") or "neutral")
+        self.theme_choice, self.accent_choice, _bg = self._saved_look
+        self.theme_tiles = {}
+        tiles = []
+        for key, label in (("system", "Match System"), ("light", "Light"), ("dark", "Dark")):
+            t = ThemeTile(key, label)
+            t.setChecked(key == self.theme_choice)
+            t.clicked.connect(lambda _=False, k=key: self._pick_theme(k))
+            self.theme_tiles[key] = t
+            tiles.append(t)
+        ap.row("Theme:", *tiles)
+        self.accent_dots = {}
+        dots = []
+        for key, label, hexcol in theme.ACCENTS:
+            d = AccentDot(key, label, hexcol)
+            d.setChecked(key == self.accent_choice)
+            d.clicked.connect(lambda _=False, k=key: self._pick_accent(k))
+            self.accent_dots[key] = d
+            dots.append(d)
+        dot_row = _hrow(*dots)
+        dot_row.layout().setSpacing(max(2, (CTRL_W - 24 * len(dots)) // (len(dots) - 1)))
+        ap.row("Accent colour:", dot_row)
+        ap.heading("Library")
+        self.thumb_size = QComboBox()
+        cur_px = int(s.get("thumb_size") or 160)
+        for label, px in (("Small", 110), ("Medium", 160), ("Large", 240)):
+            self.thumb_size.addItem(label, px)
+        self.thumb_size.setCurrentIndex(min(range(3), key=lambda i: abs(self.thumb_size.itemData(i) - cur_px)))
+        self._thumb_start = self.thumb_size.currentIndex()
+        ap.row("Thumbnail size:", self.thumb_size)
+        self.library_bg = QComboBox()
+        self.library_bg.addItem("Neutral", "neutral")
+        self.library_bg.addItem("Gallery (darker backdrop)", "gallery")
+        self.library_bg.setCurrentIndex(max(0, self.library_bg.findData(_bg)))
+        self.library_bg.currentIndexChanged.connect(lambda _i: self._preview_look())
+        ap.row("Background:", self.library_bg)
+        ap.finish()
+        tabs.addTab(ap, "Appearance")
 
         # --- File types
         ft = _Page()
@@ -423,8 +550,38 @@ class OptionsDialog(QDialog):
         except OSError as e:
             QMessageBox.warning(self, "Move Database", str(e))
 
+    # ---- appearance: previewed live, kept on OK, undone on Cancel
+    def _pick_theme(self, key):
+        self.theme_choice = key
+        for k, t in self.theme_tiles.items():
+            t.setChecked(k == key)
+        self._preview_look()
+
+    def _pick_accent(self, key):
+        self.accent_choice = key
+        for k, d in self.accent_dots.items():
+            d.setChecked(k == key)
+        self._preview_look()
+
+    def _preview_look(self):
+        from PySide6.QtWidgets import QApplication
+        theme.apply_appearance(QApplication.instance(), self.theme_choice, self.accent_choice,
+                               self.library_bg.currentData())
+
+    def reject(self):
+        from PySide6.QtWidgets import QApplication
+        if (self.theme_choice, self.accent_choice, self.library_bg.currentData()) != self._saved_look:
+            theme.apply_appearance(QApplication.instance(), *self._saved_look)
+        super().reject()
+
     def accept(self):
         s = self.lib.settings
+        s.set("theme", self.theme_choice)
+        s.set("accent", self.accent_choice)
+        s.set("library_bg", self.library_bg.currentData())
+        if self.thumb_size.currentIndex() != self._thumb_start:
+            s.set("thumb_size", int(self.thumb_size.currentData()))
+        self._preview_look()
         s.set("open_files_in", self.open_in.currentData())
         s.set("thumb_caption", self.caption.currentData())
         s.set("map_tiles", self.tiles.isChecked())

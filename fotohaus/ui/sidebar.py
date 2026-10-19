@@ -5,6 +5,7 @@ import datetime as _dt
 import json
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QAbstractItemView, QTreeWidget, QTreeWidgetItem
 
 from . import theme
@@ -14,14 +15,9 @@ ROLE = Qt.UserRole + 7
 
 
 def _sidebar_icon(name: str):
-    """Normal glyph, plus a white version shown on the blue selection."""
-    from PySide6.QtGui import QColor, QIcon
-    ic = QIcon()
-    normal, white = theme.icon(name), theme.icon(name, QColor("white"))
-    for size in (16, 32):
-        ic.addPixmap(normal.pixmap(size, size), QIcon.Normal)
-        ic.addPixmap(white.pixmap(size, size), QIcon.Selected)
-    return ic
+    """Follows the theme, and turns white on the blue (accent) selection."""
+    from PySide6.QtGui import QColor
+    return theme.icon(name, selected=QColor("white"))
 
 
 class Sidebar(QTreeWidget):
@@ -57,7 +53,7 @@ class Sidebar(QTreeWidget):
         f.setBold(True)
         it.setFont(0, f)
         it.setFlags(Qt.ItemIsEnabled)
-        it.setForeground(0, self.palette().placeholderText())
+        it.setForeground(0, QColor("#8c8f96"))     # readable in light and dark
         self.addTopLevelItem(it)
         it.setExpanded(True)
         return it
@@ -132,7 +128,7 @@ class Sidebar(QTreeWidget):
         it = self._item(parent, label or f["name"], "folder", f["id"], "folder", f["count"])
         it.setFlags(it.flags() | Qt.ItemIsDropEnabled)
         if f["hidden"]:
-            it.setForeground(0, self.palette().placeholderText())
+            it.setForeground(0, QColor("#8c8f96"))     # readable in light and dark
             it.setToolTip(0, "Hidden folder")
         return it
 

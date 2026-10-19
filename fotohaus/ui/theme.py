@@ -3,11 +3,91 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QGuiApplication
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import (QColor, QGuiApplication, QIcon, QIconEngine, QPainter, QPainterPath, QPalette, QPen,
+                           QPixmap)
 
-ACCENT = QColor("#2f7de1")
+ACCENT = QColor("#2f7de1")          # mutated in place by apply_appearance(), so every user sees the change
 STAR = QColor("#f5b301")
+DEFAULT_ACCENT = "#2f7de1"
+
+ACCENTS = [("system", "Match System", None), ("blue", "Blue", "#2f7de1"), ("purple", "Purple", "#7f5bd6"),
+           ("pink", "Pink", "#d6458f"), ("red", "Red", "#e0453f"), ("orange", "Orange", "#f08a24"),
+           ("yellow", "Yellow", "#e0b21b"), ("green", "Green", "#3fa34d"), ("graphite", "Graphite", "#8a8b90")]
+
+_APPEARANCE = {"theme": "system", "accent": "system", "library_bg": "neutral"}
+
+
+def system_accent() -> QColor:
+    """The Mac's accent colour (System Settings ▸ Appearance), as Qt reports it."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        style = QApplication.style()
+        pal = style.standardPalette() if style else QGuiApplication.palette()
+        c = pal.color(QPalette.Accent) if hasattr(QPalette, "Accent") else pal.color(QPalette.Highlight)
+        if c.isValid() and c.saturation() > 25:
+            return c
+    except Exception:
+        pass
+    return QColor(DEFAULT_ACCENT)
+
+
+def apply_appearance(app, theme: str | None = None, accent: str | None = None,
+                     library_bg: str | None = None) -> None:
+    """Apply Light/Dark/Match System, the accent colour and the library background to the whole app."""
+    if theme is not None:
+        _APPEARANCE["theme"] = theme
+    if accent is not None:
+        _APPEARANCE["accent"] = accent
+    if library_bg is not None:
+        _APPEARANCE["library_bg"] = library_bg
+    hints = QGuiApplication.styleHints()
+    if hasattr(hints, "setColorScheme"):
+        scheme = {"light": Qt.ColorScheme.Light, "dark": Qt.ColorScheme.Dark}.get(_APPEARANCE["theme"],
+                                                                                   Qt.ColorScheme.Unknown)
+        hints.setColorScheme(scheme)
+        if not getattr(app, "_fh_scheme_hooked", False):
+            hints.colorSchemeChanged.connect(lambda *_: QTimer.singleShot(0, lambda: _restyle(app)))
+            app._fh_scheme_hooked = True
+    _restyle(app)
+
+
+def _fallback_palette(dark: bool) -> QPalette:
+    """Used only where the platform style can't switch Light/Dark by itself (macOS can)."""
+    pal = QPalette()
+    if dark:
+        base, alt, text, win, btn = "#1e1f22", "#26272a", "#e8e8ea", "#232427", "#2e2f33"
+    else:
+        base, alt, text, win, btn = "#ffffff", "#f4f5f7", "#1f2124", "#ececee", "#f6f6f7"
+    for role, col in ((QPalette.Window, win), (QPalette.WindowText, text), (QPalette.Base, base),
+                      (QPalette.AlternateBase, alt), (QPalette.Text, text), (QPalette.Button, btn),
+                      (QPalette.ButtonText, text), (QPalette.ToolTipBase, alt), (QPalette.ToolTipText, text),
+                      (QPalette.PlaceholderText, "#8c8f96")):
+        pal.setColor(role, QColor(col))
+    return pal
+
+
+def _restyle(app) -> None:
+    want_theme = _APPEARANCE["theme"]
+    if want_theme in ("light", "dark") and is_dark() != (want_theme == "dark"):
+        app.setPalette(_fallback_palette(want_theme == "dark"))
+        app._fh_fallback_palette = True
+    elif want_theme == "system" and getattr(app, "_fh_fallback_palette", False):
+        app.setPalette(app.style().standardPalette())
+        app._fh_fallback_palette = False
+    hexes = dict((k, h) for k, _n, h in ACCENTS)
+    want = hexes.get(_APPEARANCE["accent"])
+    col = QColor(want) if want else system_accent()
+    ACCENT.setRgb(col.red(), col.green(), col.blue())
+    pal = app.palette()
+    for role in (QPalette.Highlight,) + ((QPalette.Accent,) if hasattr(QPalette, "Accent") else ()):
+        pal.setColor(role, ACCENT)
+    pal.setColor(QPalette.HighlightedText, QColor("white"))
+    app.setPalette(pal)
+    _cache.clear()
+    app.setStyleSheet(stylesheet())
+    for w in app.allWidgets():
+        w.update()
 
 
 def scaled_font(font, factor: float, bold: bool | None = None):
@@ -37,6 +117,8 @@ def stylesheet() -> str:
     side_fg = "#d9d9dc" if dark else "#2c2f33"
     sec = "#8c8f96" if dark else "#7b7f87"
     grid_bg = "#1b1c1e" if dark else "#ffffff"
+    if _APPEARANCE.get("library_bg") == "gallery":
+        grid_bg = "#111213" if dark else "#e9ebee"      # a quieter backdrop that lets photos stand out
     bar_bg = "#26272a" if dark else "#f6f7f9"
     border = "#3a3b3f" if dark else "#d9dce1"
     card_bg = "#2a2b2f" if dark else "#ffffff"
@@ -309,19 +391,47 @@ def _draw(name: str, p: QPainter, s: float, color: QColor) -> None:
 _cache: dict = {}
 
 
-def icon(name: str, color: QColor | None = None) -> QIcon:
-    col = color or fg()
-    key = (name, col.name())
-    if key in _cache:
-        return _cache[key]
-    ic = QIcon()
-    for size in (16, 32, 64):
-        pm = QPixmap(size, size)
+class _GlyphEngine(QIconEngine):
+    """Draws a glyph on demand, so icons follow theme and accent changes without being rebuilt."""
+
+    def __init__(self, name, color, selected=None):
+        super().__init__()
+        self.name, self.color, self.selected = name, color, selected
+
+    def paint(self, painter, rect, mode, state):
+        if mode == QIcon.Selected and self.selected is not None:
+            col = QColor(self.selected)
+        else:
+            col = QColor(self.color) if self.color is not None else fg()
+        if mode == QIcon.Disabled:
+            col.setAlpha(110)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.translate(rect.x(), rect.y())
+        side = min(rect.width(), rect.height())
+        _draw(self.name, painter, side, col)
+        painter.restore()
+
+    def pixmap(self, size, mode, state):
+        pm = QPixmap(size)
         pm.fill(Qt.transparent)
         p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        _draw(name, p, size, col)
+        self.paint(p, pm.rect(), mode, state)
         p.end()
-        ic.addPixmap(pm)
-    _cache[key] = ic
+        return pm
+
+    def clone(self):
+        return _GlyphEngine(self.name, self.color, self.selected)
+
+
+def icon(name: str, color: QColor | None = None, selected: QColor | None = None) -> QIcon:
+    """A vector icon. With no colour it uses the current text colour (and updates with the theme);
+    pass theme.ACCENT to follow the accent colour. `selected` is the colour on a selected row."""
+    live = color is None or color is ACCENT or color is STAR
+    key = (name, None if color is None else (id(color) if live else color.name()),
+           None if selected is None else QColor(selected).name())
+    ic = _cache.get(key)
+    if ic is None:
+        ic = QIcon(_GlyphEngine(name, color if live else QColor(color), selected))
+        _cache[key] = ic
     return ic

@@ -408,7 +408,7 @@ class MainWindow(QMainWindow):
         t.addAction("Analyze Photos Now (faces, objects, text)", self.start_index)
         t.addAction("Show Duplicate Files", lambda: self._go("dupes", None))
         t.addSeparator()
-        t.addAction("Configure Photo Viewer…", lambda: self.open_settings(tab=2))
+        t.addAction("Configure Photo Viewer…", lambda: self.open_settings(tab=3))
         t.addAction("Download Natural-Language Search Model…", self.download_clip)
         t.addAction("Command Line && Claude (MCP) Integration…", self.show_cli_help)
         t.addSeparator()
@@ -1760,6 +1760,7 @@ class MainWindow(QMainWindow):
             elif after != before:
                 self.start_index()
             self.tray.set_buttons(list(self.lib.settings.get("button_bar") or []))
+            self.tray.zoom.setValue(int(self.lib.settings.get("thumb_size") or 160))
             self._caption_mode()
             self._refresh_all()
 
