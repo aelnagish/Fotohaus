@@ -62,7 +62,7 @@ class Sidebar(QTreeWidget):
         label = text if count is None else f"{text}"
         it = QTreeWidgetItem([label])
         it.setData(0, ROLE, (kind, ident))
-        if count is not None:
+        if count is not None and count > 0:
             it.setToolTip(0, f"{text} — {count} item{'s' if count != 1 else ''}")
             it.setText(0, f"{text}  ")
             it.setData(0, Qt.UserRole + 8, count)
@@ -78,8 +78,7 @@ class Sidebar(QTreeWidget):
         c = self.lib.counts()
         sec = self._section("Library")
         self._item(sec, "All Photos", "all", None, "library")
-        if c["memories"]:
-            self._item(sec, "Memories", "memories", None, "memories", c["memories"])
+        self._item(sec, "Memories", "memories", None, "memories", c["memories"])
         self._item(sec, "Starred", "starred", None, "star-outline", c["starred"])
         if c["videos"]:
             self._item(sec, "Videos", "videos", None, "video", c["videos"])
@@ -89,12 +88,9 @@ class Sidebar(QTreeWidget):
         self._item(sec, "Duplicates", "dupes", None, "dupes")
         if c["hidden"]:
             self._item(sec, "Hidden", "hidden", None, "eye-off", c["hidden"])
-        if c["archived"]:
-            self._item(sec, "Archive", "archived", None, "archive", c["archived"])
-        if c["private"]:
-            self._item(sec, "Private", "private", None, "lock")
-        if c["deleted"]:
-            self._item(sec, "Recently Deleted", "deleted", None, "trash", c["deleted"])
+        self._item(sec, "Archive", "archived", None, "archive", c["archived"])
+        self._item(sec, "Private", "private", None, "lock")
+        self._item(sec, "Recently Deleted", "deleted", None, "trash", c["deleted"])
         sec = self._section("Albums")
         for a in self.lib.albums():
             it = self._item(sec, a["name"], "album", a["id"], "album", a["n"])

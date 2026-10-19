@@ -649,7 +649,9 @@ class MainWindow(QMainWindow):
             rows, title = lib.archived_photos(), "Archive"
             sub = "Archived photos are kept out of the library, search and memories. Your files aren't touched."
         elif kind == "private":
-            if self._unlock_private():
+            if not lib.counts()["private"]:
+                rows, title = [], "Private"
+            elif self._unlock_private():
                 rows, title = lib.private_photos(), "Private"
                 sub = "Only visible here, after unlocking. Lock again by quitting Fotohaus."
             else:
@@ -721,6 +723,14 @@ class MainWindow(QMainWindow):
             self.age.setToolTip("Slide right to show only newer pictures")
         self.reload_collection()
 
+    _EMPTY_HINTS = {
+        "memories": "No memories for today.\n\nPhotos taken around this date in earlier years appear here.",
+        "archived": "Nothing archived.\n\nSelect photos and choose Picture ▸ Archive (⇧⌘A) to tuck them away.",
+        "private": "Nothing private yet.\n\nSelect photos and choose Picture ▸ Move to Private.\n"
+                   "They are hidden everywhere and open only with Touch ID.",
+        "deleted": "Nothing recently deleted.\n\nDeleted photos stay here for 30 days so you can restore them.",
+    }
+
     def _update_empty(self, n=None):
         if n is None:
             n = len(self.grid.model_.entries)
@@ -733,6 +743,8 @@ class MainWindow(QMainWindow):
             elif self.collection[0] == "search":
                 self.empty.setText("No matches.\n\nTry fewer words, a person's name, a place, or see Help ▸ "
                                    "Search Tips.")
+            elif self.collection[0] in self._EMPTY_HINTS:
+                self.empty.setText(self._EMPTY_HINTS[self.collection[0]])
             elif self.jobs.busy():
                 self.empty.setText("Looking for pictures…")
             else:
