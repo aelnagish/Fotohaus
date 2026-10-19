@@ -11,17 +11,12 @@ from PIL import Image, ImageOps
 
 Image.MAX_IMAGE_PIXELS = 400_000_000
 
-from . import heif, macmedia
-
-# HEIC / HEIF: macOS ImageIO through our own Pillow plugin (AVIF is built into Pillow).
-HAVE_HEIF = heif.register()
-if not HAVE_HEIF:  # pragma: no cover - only when running from source on another system
-    try:
-        import pillow_heif  # type: ignore
-        pillow_heif.register_heif_opener()
-        HAVE_HEIF = True
-    except Exception:
-        pass
+try:  # HEIC / HEIF / AVIF
+    import pillow_heif  # type: ignore
+    pillow_heif.register_heif_opener()
+    HAVE_HEIF = True
+except Exception:  # pragma: no cover
+    HAVE_HEIF = False
 
 try:
     import rawpy  # type: ignore
@@ -29,14 +24,11 @@ try:
 except Exception:  # pragma: no cover
     HAVE_RAW = False
 
-HAVE_VIDEO = macmedia.available()
-cv2 = None
-if not HAVE_VIDEO:  # pragma: no cover - development fallback off macOS
-    try:
-        import cv2  # type: ignore
-        HAVE_VIDEO = True
-    except Exception:
-        cv2 = None
+try:
+    import cv2  # type: ignore
+    HAVE_CV2 = True
+except Exception:  # pragma: no cover
+    HAVE_CV2 = False
 
 IMAGE_EXT = {".jpg", ".jpeg", ".jpe", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp",
              ".heic", ".heif", ".avif", ".psd", ".jfif"}
@@ -119,116 +111,41 @@ def _load_raw(path: str, max_dim: int | None) -> Image.Image:
     return Image.fromarray(rgb)
 
 
-def video_frame(path: str, max_dim: int | None = None, at: float | None = None) -> Image.Image | None:
-    """An upright frame of a video (about 10% in, or at `at` seconds); None if it can't be read."""
-    im = None
-    if macmedia.available():
-        try:
-            im = macmedia.video_frame(path, max_dim, at)
-        except Exception:
-            im = None
-    elif cv2 is not None:  # pragma: no cover
-        im = _cv2_frame(path, at)
-    if im is None:          # formats AVFoundation can't read (MKV, AVI, WebM, WMV …)
-        im = _qt_frame(path, at)
-    if im is not None and max_dim and max(im.size) > max_dim:
-        im.thumbnail((max_dim, max_dim), Image.LANCZOS)
-    return im
-
-
-_qt_lock = threading.Lock()
-
-
-def _qt_frame(path: str, at: float | None) -> Image.Image | None:
-    """Grab a frame with Qt Multimedia (its bundled LGPL FFmpeg). Needs a running QApplication."""
-    try:
-        from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer, QUrl
-        from PySide6.QtMultimedia import QMediaPlayer, QVideoSink
-        import shiboken6
-    except Exception:
+def video_frame(path: str, max_dim: int | None = None) -> Image.Image | None:
+    if not HAVE_CV2:
         return None
-    if QCoreApplication.instance() is None:
-        return None
-    with _qt_lock:
-        loop = QEventLoop()
-        player, sink = QMediaPlayer(), QVideoSink()
-        player.setVideoSink(sink)
-        got: dict = {}
-
-        def on_frame(f):
-            if "img" not in got and f.isValid():
-                img = f.toImage()
-                if not img.isNull():
-                    got["img"] = img
-                    loop.quit()
-
-        def on_status(st):
-            if st == QMediaPlayer.MediaStatus.LoadedMedia:
-                pos = at * 1000 if at is not None else player.duration() * 0.1
-                player.setPosition(int(max(0, pos)))
-                player.play()
-            elif st == QMediaPlayer.MediaStatus.InvalidMedia:
-                loop.quit()
-
-        sink.videoFrameChanged.connect(on_frame)
-        player.mediaStatusChanged.connect(on_status)
-        timer = QTimer()
-        timer.setSingleShot(True)
-        timer.timeout.connect(loop.quit)
-        timer.start(8000)
-        player.setSource(QUrl.fromLocalFile(os.path.abspath(path)))
-        loop.exec()
-        timer.stop()
-        player.stop()
-        player.setVideoSink(None)
-        for obj in (timer, player, sink):
-            shiboken6.delete(obj)
-        img = got.get("img")
-    if img is None:
-        return None
-    from PySide6.QtCore import QBuffer, QIODevice
-    buf = QBuffer()
-    buf.open(QIODevice.OpenModeFlag.WriteOnly)
-    img.save(buf, "PNG")
-    return Image.open(io.BytesIO(bytes(buf.data()))).convert("RGB")
-
-
-def _cv2_frame(path, at):  # pragma: no cover - development fallback off macOS
     cap = cv2.VideoCapture(path)
     try:
         if not cap.isOpened():
             return None
-        if at is not None:
-            cap.set(cv2.CAP_PROP_POS_MSEC, at * 1000)
-        else:
-            n = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
-            if n > 10:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * 0.1))
+        n = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+        if n > 10:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * 0.1))
         ok, frame = cap.read()
-        if not ok and at is None:
+        if not ok:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ok, frame = cap.read()
-        return Image.fromarray(frame[..., ::-1].copy()) if ok else None
+        if not ok:
+            return None
+        im = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if max_dim:
+            im.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        return im
     finally:
         cap.release()
 
 
 def video_info(path: str) -> tuple[int, int, float]:
-    """(width, height, seconds); zeros if unknown."""
-    if macmedia.available():
-        try:
-            return macmedia.video_info(path)
-        except Exception:
-            return 0, 0, 0.0
-    if cv2 is None:
+    if not HAVE_CV2:
         return 0, 0, 0.0
-    cap = cv2.VideoCapture(path)  # pragma: no cover
+    cap = cv2.VideoCapture(path)
     try:
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
         fps = cap.get(cv2.CAP_PROP_FPS) or 0
         n = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
-        return w, h, (float(n / fps) if fps > 0 else 0.0)
+        dur = float(n / fps) if fps > 0 else 0.0
+        return w, h, dur
     finally:
         cap.release()
 
@@ -246,7 +163,7 @@ def load_image(path: str | os.PathLike, max_dim: int | None = None, color_manage
         im = _load_raw(path, max_dim)
     else:
         im = Image.open(path)
-        if max_dim and im.format in ("JPEG", "HEIF"):
+        if max_dim and im.format == "JPEG":
             im.draft("RGB", (max_dim, max_dim))
         try:
             im.seek(0)

@@ -11,11 +11,14 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 
 from .picasa.ini import Filter, decode_rect64
 
-from . import imgops
+try:
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover
+    cv2 = None
 
 # Picasa's straighten slider spans -1..1; we map the end stops to this angle.
 TILT_MAX_DEGREES = 10.0
@@ -37,7 +40,11 @@ def luma(a: np.ndarray) -> np.ndarray:
 
 
 def _blur(a: np.ndarray, sigma: float) -> np.ndarray:
-    return imgops.gaussian(a, max(0.3, float(sigma)))
+    sigma = max(0.3, float(sigma))
+    if cv2 is not None:
+        return cv2.GaussianBlur(a, (0, 0), sigma)
+    im = to_im(a)
+    return to_f(im.filter(ImageFilter.GaussianBlur(sigma)))
 
 
 def _scale(a: np.ndarray) -> float:
@@ -135,11 +142,15 @@ def neutral_point(a: np.ndarray, rgb: tuple[float, float, float]) -> np.ndarray:
 def smart_enhance(a: np.ndarray, strength: float = 1.0) -> np.ndarray:
     """Local-contrast (CLAHE on L*), gentle auto white balance and vibrance."""
     base = a
-    tiles = max(2, int(round(max(a.shape[:2]) / 400)))
-    y = np.clip(luma(a), 0, 1)
-    ny = imgops.clahe(y, tiles, 1.6)
-    mix = np.clip(y / 0.08, 0, 1)[..., None]     # additive in deep shadows, ratio elsewhere
-    a = mix * _apply_lum_ratio(a, ny, y) + (1 - mix) * (a + (ny - y)[..., None])
+    if cv2 is not None:
+        u8 = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+        lab = cv2.cvtColor(u8, cv2.COLOR_RGB2LAB)
+        tiles = max(2, int(round(max(a.shape[:2]) / 400)))
+        clahe = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(tiles, tiles))
+        lab[..., 0] = clahe.apply(lab[..., 0])
+        a = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB).astype(np.float32) / 255.0
+    else:
+        a = auto_contrast(a, 0.3)
     means = np.clip(a, 0, 1).reshape(-1, 3).mean(0)
     gains = np.clip(means.mean() / np.maximum(means, 1e-3), 0.9, 1.1)
     a = a * gains
@@ -169,7 +180,12 @@ def clarity(a: np.ndarray, amount: float) -> np.ndarray:
 def denoise(a: np.ndarray, strength: float) -> np.ndarray:
     if strength <= 0:
         return a
-    return imgops.denoise(np.clip(a, 0, 1), strength)
+    if cv2 is not None:
+        u8 = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+        h = 3 + 12 * strength
+        out = cv2.fastNlMeansDenoisingColored(u8, None, h, h, 7, 21)
+        return out.astype(np.float32) / 255.0
+    return to_f(to_im(a).filter(ImageFilter.MedianFilter(3)))
 
 
 def unsharp(a: np.ndarray, amount: float, radius: float = 1.2) -> np.ndarray:
@@ -392,7 +408,10 @@ def boost(a, amount=0.5):
 
 
 def neon(a):
-    e = imgops.edges(np.clip(luma(a), 0, 1))
+    if cv2 is None:
+        return invert(a)
+    g = (luma(a) * 255).astype(np.uint8)
+    e = cv2.Canny(g, 60, 140).astype(np.float32) / 255.0
     e = _blur(e, 1.2 * max(1.0, _scale(a)))
     e = np.clip(e * 3, 0, 1)
     hue = _saturate(a, 1.5)
@@ -400,13 +419,14 @@ def neon(a):
 
 
 def comicize(a):
-    a = np.clip(a, 0, 1)
-    r = max(2, int(round(4 * max(1.0, _scale(a)))))
-    smooth = imgops.guided(a, r, 0.06 ** 2)
-    q = np.round(np.clip(smooth, 0, 1) * 5) / 5
-    g = np.asarray(to_im(a).convert("L").filter(ImageFilter.MedianFilter(5)), np.float32) / 255.0
-    edges = imgops.adaptive_threshold(g, 9, 4 / 255)
-    return q * edges[..., None]
+    if cv2 is None:
+        return posterize(a, 6)
+    u8 = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+    smooth = cv2.bilateralFilter(u8, 9, 60, 60)
+    q = (np.round(smooth.astype(np.float32) / 255 * 5) / 5)
+    g = cv2.cvtColor(u8, cv2.COLOR_RGB2GRAY)
+    edges = cv2.adaptiveThreshold(cv2.medianBlur(g, 5), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, 4)
+    return q * (edges.astype(np.float32) / 255.0)[..., None]
 
 
 def night_vision(a):
@@ -442,8 +462,15 @@ def focal_pixelate(a, cx=0.5, cy=0.5, size=0.4, pixel=0.025):
 
 
 def linear_blur(a, amount=2.0, angle=0.0):
+    if cv2 is None:
+        return a
     k = max(3, int(amount * 6 * max(0.5, _scale(a))) | 1)
-    return imgops.motion_blur(a, k, angle)
+    kern = np.zeros((k, k), np.float32)
+    kern[k // 2, :] = 1.0
+    M = cv2.getRotationMatrix2D((k / 2 - 0.5, k / 2 - 0.5), angle, 1.0)
+    kern = cv2.warpAffine(kern, M, (k, k))
+    kern /= max(1e-6, kern.sum())
+    return cv2.filter2D(a, -1, kern)
 
 
 def directional(a, kind, lr=0.0, tb=0.0):
@@ -548,15 +575,16 @@ def text_overlay(im: Image.Image, text: str, x: float, y: float, size: float, co
 
 def retouch(a, strokes):
     """Heal brush strokes [(x, y, r)] (relative coords, r relative to image width) by inpainting."""
-    if not strokes:
+    if cv2 is None or not strokes:
         return a
     h, w = a.shape[:2]
-    mask = Image.new("L", (w, h), 0)
-    d = ImageDraw.Draw(mask)
+    mask = np.zeros((h, w), np.uint8)
     for x, y, r in strokes:
-        cx, cy, rr = int(x * w), int(y * h), max(1, int(r * w))
-        d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), fill=255)
-    return imgops.inpaint(np.clip(a, 0, 1).astype(np.float32), np.asarray(mask) > 0)
+        cv2.circle(mask, (int(x * w), int(y * h)), max(1, int(r * w)), 255, -1)
+    u8 = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+    rad = max(3, int(max(h, w) / 300))
+    out = cv2.inpaint(u8, mask, rad, cv2.INPAINT_TELEA)
+    return out.astype(np.float32) / 255.0
 
 
 def encode_strokes(strokes) -> str:
@@ -931,10 +959,12 @@ def apply_filter(im: Image.Image, f: Filter) -> Image.Image:
 
 
 def _hue_sat(a, hue, sat):
-    hsv = imgops.rgb_to_hsv(np.clip(a, 0, 1).astype(np.float32))
+    if cv2 is None:
+        return _saturate(a, sat)
+    hsv = cv2.cvtColor(np.clip(a, 0, 1).astype(np.float32), cv2.COLOR_RGB2HSV)
     hsv[..., 0] = (hsv[..., 0] + hue * 360.0) % 360.0
     hsv[..., 1] = np.clip(hsv[..., 1] * (1 + sat), 0, 1)
-    return imgops.hsv_to_rgb(hsv)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
 
 def _num(s) -> float:

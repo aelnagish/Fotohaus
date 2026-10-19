@@ -1945,8 +1945,10 @@ class MainWindow(QMainWindow):
             "<p>Picasa is a trademark of Google LLC. Fotohaus is an independent project.</p>"
             "<p>Map data © OpenStreetMap contributors. Face models from OpenCV Zoo. "
             "See the Licenses folder inside the app for third-party licenses.</p>"
-            "<p>Free to use for everyone. Selling or bundling Fotohaus requires a license "
-            "from the author.</p>"
+            "<p>Copyright © 2026 Abdullah Yusuf. Fotohaus is free software: you can redistribute it "
+            "and/or modify it under the terms of the GNU General Public License, version 3 or (at your "
+            "option) any later version. It comes with ABSOLUTELY NO WARRANTY. Source code: "
+            '<a href="https://github.com/aelnagish/fotohaus">github.com/aelnagish/fotohaus</a></p>'
             f'<p>Enjoying {APP_NAME}? <a href="{SUPPORT_URL}">☕ Buy me a coffee</a></p>'))
 
     # ================================================================== window state

@@ -8,7 +8,7 @@ A fast, private photo organizer for macOS that finds faces, reads text in photos
 touching your originals, and never uploads a single pixel.
 
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple)](#install)
-[![License](https://img.shields.io/badge/license-free%20to%20use-2ea44f)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%E2%98%95-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/aelnagish)
 
 <img src="docs/library.jpg" alt="Fotohaus library view: photos grouped by folder, with a sidebar, info panel and photo tray" width="100%">
@@ -142,8 +142,7 @@ python -m fotohaus.cli --help # command line
 ```
 
 Your library database lives in `~/Library/Application Support/Fotohaus` (set `FOTOHAUS_HOME` to use
-a different place). Run the tests with `pip install -r requirements-dev.txt` and then
-`python tests/test_fotohaus.py`. To build the app and disk
+a different place). Run the tests with `python tests/test_fotohaus.py`. To build the app and disk
 image, see `packaging/build_mac_app.py`.
 
 ## Support
@@ -156,10 +155,13 @@ Bug reports and ideas are welcome in [Issues](../../issues). Pull requests are c
 
 ## License
 
-**Free to use for everyone**, at home or at work. Selling Fotohaus, or bundling it into a paid
-product or service, needs a license from the author; see [COMMERCIAL.md](COMMERCIAL.md). Full terms
-are in [LICENSE](LICENSE). The app also includes third-party components under their own licenses,
-listed in `packaging/THIRD_PARTY_NOTICES.md`. The app contains no GPL-licensed code.
+Fotohaus is free software, licensed under the **GNU General Public License, version 3 or later**
+(see [LICENSE](LICENSE)). You may use, study, share and change it; if you distribute it, modified
+or not, you must pass on the same freedoms and the source code. Copyright © 2026 Abdullah Yusuf.
+
+The app bundles third-party components under their own licenses, listed in
+[`packaging/THIRD_PARTY_NOTICES.md`](packaging/THIRD_PARTY_NOTICES.md). The source code of the
+GPL libraries inside the app (FFmpeg, x264, x265) is attached to each release.
 
 <sub>Screenshots use freely licensed sample images from the scikit-image, imageio and Pillow
 projects. Fotohaus is an independent project.</sub>

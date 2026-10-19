@@ -2,15 +2,9 @@
 
 Bug reports and ideas are welcome. Please open an issue.
 
-Pull requests: Fotohaus is free to use, while resale and commercial bundling are licensed separately
-(see [COMMERCIAL.md](COMMERCIAL.md)), so every contribution has to be licensable both ways. By
-submitting a pull request you agree that:
+Pull requests are welcome too. Fotohaus is licensed under the GNU General Public License, version 3
+or later (see [LICENSE](LICENSE)). By submitting a pull request you agree that your contribution is
+your own work (or that you have the right to submit it) and that it is licensed under the same
+terms, GPL-3.0-or-later. You keep the copyright to your contribution.
 
-1. the contribution is your own work, or you have the right to submit it;
-2. you grant the project owner (Abdullah Yusuf, @aelnagish) a perpetual, worldwide, royalty-free,
-   irrevocable license to use, modify, sublicense and relicense the contribution under any terms,
-   including commercial licenses;
-3. you keep the copyright to your contribution.
-
-Add this line to your pull request description to confirm:
-`I agree to the contributor terms in CONTRIBUTING.md.`
+Run the tests before submitting: `python tests/test_fotohaus.py`.

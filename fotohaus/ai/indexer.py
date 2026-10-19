@@ -45,6 +45,11 @@ class Indexer:
         if total == 0:
             self._embed_imported_faces(flags, should_stop)
             return stats
+        try:
+            import cv2
+            cv2.setNumThreads(2)
+        except Exception:
+            pass
         workers = workers or max(2, min(4, (os.cpu_count() or 4) // 2))
         conds = ["phash IS NULL"]
         if flags["faces"]:

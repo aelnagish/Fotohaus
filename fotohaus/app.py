@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import sys
 
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+
 
 def _mac_app_name(name: str) -> None:
     """Make the menu bar show the app name when not launched from a bundle."""

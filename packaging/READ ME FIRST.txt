@@ -32,5 +32,10 @@ COMMAND LINE / CLAUDE
   MCP server for Claude Desktop (claude_desktop_config.json):
     "fotohaus": { "command": "/Applications/Fotohaus.app/Contents/MacOS/fotohaus-cli", "args": ["mcp"] }
 
+LICENSE
+  Fotohaus is free software under the GNU GPL, version 3 or later, and comes with
+  no warranty. Source code: https://github.com/aelnagish/fotohaus
+  Third-party licenses: Fotohaus.app/Contents/Resources/Licenses
+
 Your library database lives in ~/Library/Application Support/Fotohaus
 Logs (if something goes wrong at startup): ~/Library/Logs/Fotohaus.log

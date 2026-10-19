@@ -37,12 +37,10 @@ from fotohaus import __version__  # noqa: E402
 PYVER = "3.12"
 BUNDLE_ID = "app.fotohaus.Fotohaus"
 MIN_MACOS = "14.0"
-REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "numpy", "pillow", "piexif", "rawpy", "onnxruntime",
-                "tokenizers", "pyobjc-core", "pyobjc-framework-Cocoa", "pyobjc-framework-Quartz",
-                "pyobjc-framework-Vision", "pyobjc-framework-AVFoundation",
+REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av", "numpy", "pillow", "pillow-heif",
+                "opencv-python-headless", "piexif", "rawpy", "onnxruntime", "tokenizers", "pyobjc-core",
+                "pyobjc-framework-Cocoa", "pyobjc-framework-Quartz", "pyobjc-framework-Vision",
                 "pyobjc-framework-UniformTypeIdentifiers", "pyobjc-framework-LocalAuthentication"]
-# Never ship these: they bundle GPL-licensed code (x264, x265, GPL builds of FFmpeg).
-FORBIDDEN = ["cv2", "av", "pillow_heif", "opencv_python_headless", "opencv_python", "pi_heif"]
 
 # Qt pieces we ship (everything else in PySide6 is removed)
 QT_MODULES = {"QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtSvg", "QtMultimedia", "QtMultimediaWidgets",
@@ -52,7 +50,7 @@ QT_PLUGIN_DIRS = {"platforms", "styles", "imageformats", "iconengines", "tls", "
 SITE_REMOVE = ["pip", "setuptools", "wheel", "PyObjCTest", "google", "huggingface_hub", "hf_xet", "httpx2", "httpcore2", "anyio", "h11", "fsspec",
                "filelock", "click", "tqdm", "yaml", "_yaml", "sympy", "mpmath", "bin", "truststore",
                "coloredlogs", "humanfriendly", "onnxruntime/tools", "onnxruntime/transformers",
-               "onnxruntime/quantization", "numpy/tests", "numpy/_core/tests", "PIL/tests"]
+               "onnxruntime/quantization", "cv2/data", "numpy/tests", "numpy/_core/tests", "PIL/tests"]
 STDLIB_REMOVE = ["test", "idlelib", "tkinter", "turtledemo", "ensurepip", "lib2to3", "pydoc_data",
                  f"config-{PYVER}-darwin"]
 
@@ -66,6 +64,7 @@ _a = list(getattr(_sys, "orig_argv", _sys.argv))
 _args = [x for x in _a[1:] if not x.startswith("-psn")]
 if _os.path.basename(_sys.executable) == "Fotohaus" and all(
         not x.startswith("-") and not x.endswith(".py") and _os.path.exists(x) for x in _args):
+    _os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
     try:
         from fotohaus.app import main as _main
         _rc = _main([_a[0] if _a else "Fotohaus"] + _args)
@@ -99,29 +98,6 @@ def run(cmd, **kw):
     subprocess.run([str(c) for c in cmd], check=True, **kw)
 
 
-GPL_MARKERS = (b"--enable-gpl", b"--enable-libx264", b"--enable-libx265", b"x264_encoder_open", b"x265_encoder_open",
-               b"libpostproc license")
-
-
-def assert_no_gpl(root: Path):
-    """Fail the build if any GPL-only library (x264, x265, GPL FFmpeg) slipped into the bundle."""
-    bad = []
-    for p in root.rglob("*"):
-        if not p.is_file():
-            continue
-        n = p.name.lower()
-        if any(k in n for k in ("x264", "x265", "postproc")):
-            bad.append(str(p))
-            continue
-        if is_macho(p) and p.stat().st_size > 0:
-            data = p.read_bytes()
-            if any(m in data for m in GPL_MARKERS):
-                bad.append(str(p))
-    if bad:
-        raise SystemExit("GPL components found in the bundle:\n  " + "\n  ".join(bad))
-    print("license check: no GPL-only components in the bundle")
-
-
 def is_macho(p: Path) -> bool:
     try:
         with open(p, "rb") as fh:
@@ -146,10 +122,6 @@ def install_site(site: Path, prepared: Path | None):
 
 
 def prune_site(site: Path):
-    for p in list(site.iterdir()):
-        stem = p.name.split("-")[0].split(".")[0].lstrip("_").lower()
-        if stem in FORBIDDEN:
-            shutil.rmtree(p) if p.is_dir() else p.unlink()
     for rel in SITE_REMOVE:
         p = site / rel
         if p.is_dir():
@@ -333,7 +305,7 @@ def build(args):
         "LSArchitecturePriority": ["arm64"], "NSHighResolutionCapable": True,
         "NSSupportsAutomaticGraphicsSwitching": True, "NSRequiresAquaSystemAppearance": False,
         "NSPrincipalClass": "NSApplication",
-        "NSHumanReadableCopyright": "Fotohaus — independent open-source project. Not affiliated with Google.",
+        "NSHumanReadableCopyright": "© 2026 Abdullah Yusuf. Free software under the GNU GPL v3 or later.",
         "NSDesktopFolderUsageDescription": "Fotohaus shows the photos in folders you choose to add.",
         "NSDocumentsFolderUsageDescription": "Fotohaus shows the photos in folders you choose to add.",
         "NSDownloadsFolderUsageDescription": "Fotohaus shows the photos in folders you choose to add.",
@@ -376,7 +348,6 @@ def build(args):
         os.chmod(p, m | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
                  ((stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) if p.is_dir() or m & stat.S_IXUSR else 0))
     shutil.rmtree(work)
-    assert_no_gpl(app)
     if args.rcodesign:
         run([args.rcodesign, "sign", str(app)])
     return app
