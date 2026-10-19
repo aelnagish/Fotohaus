@@ -261,7 +261,7 @@ class RightPanel(QTabWidget):
         self.setObjectName("InfoPanel")
         self.setMinimumWidth(270)
         self.setMaximumWidth(360)
-        self.info = InfoPanel(lib)
+        self.info = InfoPanel(lib, loader)
         self.tags = TagsPanel(lib)
         self.people = SelectionPeoplePanel(lib)
         self.places = PlacesPanel(lib, loader)

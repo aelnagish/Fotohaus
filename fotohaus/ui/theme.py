@@ -39,6 +39,12 @@ def stylesheet() -> str:
     grid_bg = "#1b1c1e" if dark else "#ffffff"
     bar_bg = "#26272a" if dark else "#f6f7f9"
     border = "#3a3b3f" if dark else "#d9dce1"
+    card_bg = "#2a2b2f" if dark else "#ffffff"
+    chip_bg = "#33353a" if dark else "#f1f2f5"
+    person_bg = "#1f3550" if dark else "#e8f1fd"
+    person_border = "#2f5a8f" if dark else "#bcd5f5"
+    star_bg = "#4a3b10" if dark else "#fff6dc"
+    star_border = "#8a6a10" if dark else "#f2d27a"
     return f"""
     QTreeWidget#Sidebar {{ background: {side_bg}; color: {side_fg}; border: none; font-size: 13px; }}
     QTreeWidget#Sidebar {{ outline: 0; show-decoration-selected: 0; }}
@@ -53,6 +59,21 @@ def stylesheet() -> str:
     QLabel#Section {{ color: {sec}; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }}
     QLabel#Title {{ font-size: 18px; font-weight: 600; }}
     QLabel#Muted {{ color: {sec}; }}
+    QFrame#InfoCard {{ background: {card_bg}; border: 1px solid {border}; border-radius: 10px; }}
+    QFrame#InfoCard QLabel {{ background: transparent; border: none; }}
+    QLabel#InfoTitle {{ font-size: 15px; font-weight: 600; }}
+    QLineEdit#InfoField {{ border: 1px solid {border}; border-radius: 6px; padding: 5px 8px;
+                           background: {grid_bg}; }}
+    QLineEdit#InfoField:focus {{ border: 1px solid {ACCENT.name()}; }}
+    QPushButton#StarPill {{ border: 1px solid {border}; border-radius: 13px; padding: 4px 14px;
+                            background: {card_bg}; min-height: 18px; }}
+    QPushButton#StarPill:checked {{ background: {star_bg}; border-color: {star_border}; }}
+    QPushButton#LinkButton {{ border: none; background: transparent; color: {ACCENT.name()}; padding: 2px 0; }}
+    QPushButton#LinkButton:hover {{ text-decoration: underline; }}
+    QPushButton#Chip, QPushButton#ChipAlbum, QPushButton#ChipPerson {{ border-radius: 10px; padding: 3px 10px;
+                            border: 1px solid {border}; background: {chip_bg}; }}
+    QPushButton#ChipPerson {{ background: {person_bg}; border-color: {person_border}; }}
+    QPushButton#ChipPerson:hover {{ border-color: {ACCENT.name()}; }}
     QLineEdit#Search {{ border-radius: 12px; padding: 4px 10px; min-width: 260px;
                         border: 1px solid {border}; background: {grid_bg}; }}
     QPushButton#Effect {{ text-align: left; padding: 6px 10px; }}
