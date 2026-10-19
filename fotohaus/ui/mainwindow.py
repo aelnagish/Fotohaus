@@ -270,7 +270,7 @@ class MainWindow(QMainWindow):
         f.addAction("Rename…", self.rename_selected, S("Ctrl+Shift+M"))
         f.addAction("Move to Trash", self.trash_selected, S("Ctrl+Backspace"))
         f.addSeparator()
-        a = f.addAction("Options…", self.open_settings, S.Preferences)
+        a = f.addAction("Settings…", self.open_settings, S.Preferences)
         a.setMenuRole(QAction.PreferencesRole)
         q = f.addAction("Quit", self.close, S.Quit)
         q.setMenuRole(QAction.QuitRole)
@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         t.addAction("Download Natural-Language Search Model…", self.download_clip)
         t.addAction("Command Line && Claude (MCP) Integration…", self.show_cli_help)
         t.addSeparator()
-        t.addAction("Options…", self.open_settings)
+        t.addAction("Settings…", self.open_settings)
         # ---- Help
         h = mb.addMenu("&Help")
         h.addAction("Keyboard Shortcuts", self.show_shortcuts, S("Ctrl+/"))
@@ -1748,10 +1748,8 @@ class MainWindow(QMainWindow):
         dlg.reindex.connect(self._reindex_all)
         dlg.download_clip.connect(lambda: self.download_clip(dlg))
         dlg.folder_manager.connect(self.folder_manager)
-        from PySide6.QtWidgets import QTabWidget
-        tw = dlg.findChild(QTabWidget)
-        if tw is not None and isinstance(tab, int):
-            tw.setCurrentIndex(tab)
+        if isinstance(tab, int):
+            dlg.set_page(tab)
         before = (self.lib.settings.get("faces_enabled"), self.lib.settings.get("vision_enabled"),
                   self.lib.settings.get("clip_enabled"), tuple(self.lib.settings.get("file_types") or []))
         if dlg.exec():
@@ -1778,7 +1776,7 @@ class MainWindow(QMainWindow):
             self.lib.settings.set("clip_enabled", True)
             if dlg is not None:
                 try:
-                    dlg.clip_status.setText("Model installed.")
+                    dlg.clip_status.setText("Installed")
                     dlg.clip_cb.setChecked(True)
                 except RuntimeError:
                     pass
@@ -1811,8 +1809,8 @@ class MainWindow(QMainWindow):
             "and edits appear here and stay visible to Picasa.\n\n"
             "• Edits are non-destructive until you choose File ▸ Save; originals go into .picasaoriginals, "
             "exactly like Picasa.\n"
-            "• Captions and tags can be stored inside JPEGs (IPTC/XMP) — see Options ▸ Name Tags & Metadata.\n"
-            "• Picasa's contacts.xml (name tags) can be imported from Options.\n\n"
+            "• Captions and tags can be stored inside JPEGs (IPTC/XMP) — see Settings ▸ Name Tags & Metadata.\n"
+            "• Picasa's contacts.xml (name tags) can be imported from Settings ▸ Name Tags & Metadata.\n\n"
             "Picasa Web Albums, Google+ sharing, Blogger and print ordering were Google services that no longer "
             "exist; Fotohaus offers the macOS Share menu, Email, web-page export and printing instead."))
 

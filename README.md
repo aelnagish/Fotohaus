@@ -112,7 +112,7 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
 2. Open the disk image and drag **Fotohaus** into **Applications**.
 3. The first time, right-click Fotohaus and choose **Open**. Fotohaus isn't notarized by Apple yet,
    so macOS asks once. You can also allow it in *System Settings ▸ Privacy & Security*.
-4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Options ▸ Photo Viewer*.
+4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Settings ▸ Photo Viewer*.
 
 ### Run from source
 
