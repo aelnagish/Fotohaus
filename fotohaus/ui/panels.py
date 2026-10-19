@@ -255,18 +255,44 @@ class PlacesPanel(QWidget):
 
 
 class Segmented(QWidget):
-    """A macOS-style segmented control: equal segments on a rounded track, the current one raised."""
+    """A macOS-style segmented control on a rounded track.
+    fit=True sizes each segment to its text; accent=True fills the current segment with the accent colour."""
     changed = Signal(int)
 
-    def __init__(self, labels, parent=None):
+    def __init__(self, labels, parent=None, fit=False, accent=False):
         super().__init__(parent)
         self.labels = list(labels)
+        self.fit, self.accent = fit, accent
         self.index = 0
         self._hover = -1
         self.setMouseTracking(True)
         self.setFixedHeight(28)
         self.setCursor(Qt.PointingHandCursor)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Fixed if fit else QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def _widths(self):
+        fm = self.fontMetrics()
+        return [fm.horizontalAdvance(lab) + 26 for lab in self.labels]
+
+    def sizeHint(self):
+        from PySide6.QtCore import QSize
+        return QSize(sum(self._widths()) + 4, 28) if self.fit else QSize(240, 28)
+
+    def _rects(self):
+        from PySide6.QtCore import QRectF
+        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        n = len(self.labels)
+        if self.fit:
+            ws = self._widths()
+            scale = (track.width() - 4) / max(1, sum(ws))
+            ws = [w * scale for w in ws]
+        else:
+            ws = [(track.width() - 4) / max(1, n)] * n
+        out, x = [], track.left() + 2
+        for w in ws:
+            out.append(QRectF(x, track.top() + 2, w, track.height() - 4))
+            x += w
+        return track, out
 
     def set_index(self, i):
         if 0 <= i < len(self.labels) and i != self.index:
@@ -275,8 +301,11 @@ class Segmented(QWidget):
             self.changed.emit(i)
 
     def _seg_at(self, x):
-        w = self.width() / max(1, len(self.labels))
-        return min(len(self.labels) - 1, max(0, int(x // w)))
+        _t, rects = self._rects()
+        for i, r in enumerate(rects):
+            if x < r.right():
+                return i
+        return len(rects) - 1
 
     def mousePressEvent(self, e):
         self.set_index(self._seg_at(e.position().x()))
@@ -292,39 +321,35 @@ class Segmented(QWidget):
         self.update()
 
     def paintEvent(self, e):
-        from PySide6.QtCore import QRectF
         from PySide6.QtGui import QColor, QPainter
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         dark = theme.is_dark()
-        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        track, rects = self._rects()
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#2f3034" if dark else "#e4e6ea"))
         p.drawRoundedRect(track, 8, 8)
-        n = len(self.labels)
-        w = (track.width() - 4) / n
-        # separators between unselected segments
         p.setPen(QColor("#45464b" if dark else "#cfd2d8"))
-        for i in range(1, n):
+        for i in range(1, len(rects)):
             if i not in (self.index, self.index + 1):
-                x = track.left() + 2 + i * w
+                x = rects[i].left()
                 p.drawLine(int(x), int(track.top() + 7), int(x), int(track.bottom() - 7))
-        if 0 <= self._hover < n and self._hover != self.index:
+        if 0 <= self._hover < len(rects) and self._hover != self.index:
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(255, 255, 255, 18) if dark else QColor(0, 0, 0, 12))
-            p.drawRoundedRect(QRectF(track.left() + 2 + self._hover * w, track.top() + 2, w, track.height() - 4), 6, 6)
-        sel = QRectF(track.left() + 2 + self.index * w, track.top() + 2, w, track.height() - 4)
+            p.drawRoundedRect(rects[self._hover], 6, 6)
+        sel = rects[self.index]
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(0, 0, 0, 30))
         p.drawRoundedRect(sel.translated(0, 0.8), 6, 6)
-        p.setBrush(QColor("#5a5b60" if dark else "#ffffff"))
+        p.setBrush(theme.ACCENT if self.accent else QColor("#5a5b60" if dark else "#ffffff"))
         p.drawRoundedRect(sel, 6, 6)
         f = self.font()
-        for i, lab in enumerate(self.labels):
-            f.setBold(i == self.index)
+        for i, (lab, r) in enumerate(zip(self.labels, rects)):
+            f.setBold(i == self.index and not self.accent)
             p.setFont(f)
-            p.setPen(theme.fg())
-            p.drawText(QRectF(track.left() + 2 + i * w, track.top(), w, track.height()), Qt.AlignCenter, lab)
+            p.setPen(QColor("white") if (self.accent and i == self.index) else theme.fg())
+            p.drawText(r, Qt.AlignCenter, lab)
         p.end()
 
 

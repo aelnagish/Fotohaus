@@ -160,7 +160,17 @@ class _Page(QWidget):
         self.labels.append(lab)
         if len(controls) == 1:
             c = controls[0]
-            if fixed and (isinstance(c, (QComboBox, QSpinBox, QLineEdit)) or c.property("full_width")):
+            if fixed and isinstance(c, (QComboBox, QSpinBox, QLineEdit)):
+                # put drop-downs in a plain box of the control width, exactly like the button rows, so the
+                # Mac lines up their *visible* edges the same way (it insets controls differently otherwise)
+                box = QWidget()
+                bl = QHBoxLayout(box)
+                bl.setContentsMargins(0, 0, 0, 0)
+                c.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+                bl.addWidget(c)
+                c = box
+                c.setProperty("full_width", True)
+            if fixed and c.property("full_width"):
                 c.setFixedWidth(CTRL_W)
                 self.sized.append(c)
             self.g.addWidget(c, r, 2, Qt.AlignLeft | Qt.AlignVCenter)
@@ -180,15 +190,9 @@ class _Page(QWidget):
         self.g.setRowStretch(self._r, 1)
 
     def set_control_width(self, w: int) -> None:
-        """Give every control the same *visible* width. On the Mac, drop-downs are drawn inset from
-        their frame while plain containers are not, so add that inset back to keep the edges in line."""
-        from PySide6.QtWidgets import QWidgetItem
         self.g.setColumnMinimumWidth(2, w)
         for c in self.sized:
             c.setFixedWidth(w)
-            extra = w - QWidgetItem(c).sizeHint().width()     # style margins around the visible control
-            if extra > 0:
-                c.setFixedWidth(w + extra)
 
     def indent_headings(self, longest: int) -> None:
         """Start the section titles a couple of letters left of the longest label (shared by all tabs)."""
@@ -245,11 +249,12 @@ class OptionsDialog(QDialog):
         self.setWindowTitle("Options")
         v = QVBoxLayout(self)
         tabs = QTabWidget()
-        bar = tabs.tabBar()
-        bar.setElideMode(Qt.ElideNone)      # always show the full tab names
-        bar.setUsesScrollButtons(False)
-        bar.setExpanding(False)
+        tabs.tabBar().hide()           # pages are switched by a segmented control in the accent colour
         self.tabs = tabs
+        seg_row = QHBoxLayout()
+        seg_row.addStretch()
+        self.seg_holder = seg_row
+        v.addLayout(seg_row)
         v.addWidget(tabs)
 
         # --- General
@@ -492,7 +497,13 @@ class OptionsDialog(QDialog):
         self._db_path.setText(self._db_path.fontMetrics().elidedText(
             str(DATA_DIR).replace(str(Path.home()), "~"), Qt.ElideMiddle, half))
         # wide enough that every tab name fits on one row
-        need = bar.sizeHint().width() + 48
+        from .panels import Segmented
+        self.seg = Segmented([tabs.tabText(i).replace("&&", "&") for i in range(tabs.count())], fit=True, accent=True)
+        self.seg.changed.connect(tabs.setCurrentIndex)
+        tabs.currentChanged.connect(lambda i: self.seg.set_index(i))
+        self.seg_holder.addWidget(self.seg)
+        self.seg_holder.addStretch()
+        need = self.seg.sizeHint().width() + 48
         self.setMinimumWidth(need)
         self._width = max(need, 680)
         tabs.currentChanged.connect(self._fit_to_tab)
@@ -512,7 +523,7 @@ class OptionsDialog(QDialog):
         w = max(self.width(), self._width) - 30
         lay = page.layout()
         page_h = lay.totalHeightForWidth(w) if lay.hasHeightForWidth() else page.sizeHint().height()
-        chrome = self.tabs.tabBar().sizeHint().height() + 12      # tab row + pane frame
+        chrome = 12                                                # pane frame
         extra = self.sizeHint().height() - self.tabs.sizeHint().height()   # margins + OK/Cancel row
         self.resize(max(self.width(), self._width) if self.isVisible() else self._width,
                     page_h + chrome + extra)

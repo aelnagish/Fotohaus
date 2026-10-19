@@ -67,12 +67,110 @@ def _fallback_palette(dark: bool) -> QPalette:
     return pal
 
 
+def _accent_images() -> dict:
+    """Checkbox / radio / drop-down arrow images in the current accent (stylesheets need image files)."""
+    import tempfile
+    from pathlib import Path
+    d = Path(tempfile.gettempdir()) / "fotohaus-ui"
+    d.mkdir(exist_ok=True)
+    dark = is_dark()
+    tag = f"{ACCENT.name()[1:]}_{int(dark)}"
+    out = {}
+    off_border = QColor("#6a6c72" if dark else "#b3b6bd")
+    off_fill = QColor("#2a2b2f" if dark else "#ffffff")
+    for kind in ("check", "radio"):
+        for on in (False, True):
+            for enabled in (True, False):
+                pm = QPixmap(36, 36)
+                pm.fill(Qt.transparent)
+                p = QPainter(pm)
+                p.setRenderHint(QPainter.Antialiasing)
+                if not enabled:
+                    p.setOpacity(0.45)
+                r = QRectF(3, 3, 30, 30)
+                if on:
+                    p.setPen(Qt.NoPen)
+                    p.setBrush(ACCENT)
+                else:
+                    p.setPen(QPen(off_border, 2))
+                    p.setBrush(off_fill)
+                (p.drawRoundedRect(r, 8, 8) if kind == "check" else p.drawEllipse(r))
+                if on:
+                    p.setPen(QPen(QColor("white"), 4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                    if kind == "check":
+                        p.drawPolyline([QPointF(10, 18.5), QPointF(15.5, 24), QPointF(26, 12)])
+                    else:
+                        p.setPen(Qt.NoPen)
+                        p.setBrush(QColor("white"))
+                        p.drawEllipse(QRectF(12.5, 12.5, 11, 11))
+                p.end()
+                f = d / f"{kind}_{int(on)}_{int(enabled)}_{tag}.png"
+                pm.save(str(f))
+                out[(kind, on, enabled)] = f.as_posix()
+    pm = QPixmap(36, 36)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    p.setBrush(ACCENT)
+    p.drawRoundedRect(QRectF(2, 2, 32, 32), 8, 8)
+    p.setPen(QPen(QColor("white"), 3.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.drawPolyline([QPointF(12, 15), QPointF(18, 9.5), QPointF(24, 15)])
+    p.drawPolyline([QPointF(12, 21), QPointF(18, 26.5), QPointF(24, 21)])
+    p.end()
+    f = d / f"combo_{tag}.png"
+    pm.save(str(f))
+    out["combo"] = f.as_posix()
+    return out
+
+
+def _accent_controls_css() -> str:
+    """macOS draws checkboxes, default buttons, drop-downs and sliders in the *system* accent.
+    When the user picks another accent, draw those controls ourselves so every accent matches."""
+    if _APPEARANCE.get("accent", "system") == "system":
+        return ""
+    dark = is_dark()
+    im = _accent_images()
+    border = "#4a4b50" if dark else "#c9ccd2"
+    field = "#2e2f33" if dark else "#ffffff"
+    txt = "#e8e8ea" if dark else "#1f2124"
+    a = ACCENT.name()
+    css = f"""
+    QPushButton:default {{ background: {a}; color: white; border: none; border-radius: 6px;
+                          padding: 4px 18px; min-height: 18px; }}
+    QPushButton:default:pressed {{ background: {ACCENT.darker(115).name()}; }}
+    QComboBox {{ border: 1px solid {border}; border-radius: 6px; padding: 3px 30px 3px 9px;
+                 background: {field}; color: {txt}; min-height: 18px; }}
+    QComboBox:disabled {{ color: #8c8f96; }}
+    QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 20px;
+                            margin-right: 3px; border: none; }}
+    QComboBox::down-arrow {{ image: url({im['combo']}); width: 17px; height: 17px; }}
+    QComboBox QAbstractItemView {{ selection-background-color: {a}; selection-color: white; }}
+    QSlider::groove:horizontal {{ height: 4px; background: {border}; border-radius: 2px; }}
+    QSlider::sub-page:horizontal {{ background: {a}; border-radius: 2px; }}
+    QSlider::handle:horizontal {{ background: white; border: 1px solid {border}; width: 16px; height: 16px;
+                                  margin: -7px 0; border-radius: 8px; }}
+    QProgressBar::chunk {{ background: {a}; border-radius: 3px; }}
+    """
+    for kind, sel in (("check", "QCheckBox"), ("radio", "QRadioButton")):
+        css += f"""
+    {sel}::indicator {{ width: 16px; height: 16px; }}
+    {sel}::indicator:unchecked {{ image: url({im[(kind, False, True)]}); }}
+    {sel}::indicator:checked {{ image: url({im[(kind, True, True)]}); }}
+    {sel}::indicator:unchecked:disabled {{ image: url({im[(kind, False, False)]}); }}
+    {sel}::indicator:checked:disabled {{ image: url({im[(kind, True, False)]}); }}"""
+    return css
+
+
 def _restyle(app) -> None:
+    import sys
     want_theme = _APPEARANCE["theme"]
-    if want_theme in ("light", "dark") and is_dark() != (want_theme == "dark"):
+    # macOS switches Light/Dark natively through setColorScheme(); a hand-made palette there would
+    # override the native controls (bordered tool buttons, grey dialogs), so only use it elsewhere.
+    if sys.platform != "darwin" and want_theme in ("light", "dark") and is_dark() != (want_theme == "dark"):
         app.setPalette(_fallback_palette(want_theme == "dark"))
         app._fh_fallback_palette = True
-    elif want_theme == "system" and getattr(app, "_fh_fallback_palette", False):
+    elif getattr(app, "_fh_fallback_palette", False) and (sys.platform == "darwin" or want_theme == "system"):
         app.setPalette(app.style().standardPalette())
         app._fh_fallback_palette = False
     hexes = dict((k, h) for k, _n, h in ACCENTS)
@@ -85,7 +183,7 @@ def _restyle(app) -> None:
     pal.setColor(QPalette.HighlightedText, QColor("white"))
     app.setPalette(pal)
     _cache.clear()
-    app.setStyleSheet(stylesheet())
+    app.setStyleSheet(stylesheet() + _accent_controls_css())
     for w in app.allWidgets():
         w.update()
 
