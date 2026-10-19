@@ -117,6 +117,8 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
 ### Run from source
 
 ```bash
+./run.sh                     # first run sets everything up, then opens the app
+# or manually:
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m fotohaus            # app
