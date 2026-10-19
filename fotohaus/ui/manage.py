@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFileDialog, QFileSystemModel, QFormLayout, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-                               QGroupBox, QRadioButton, QSpinBox, QSplitter, QTabWidget, QTreeView, QVBoxLayout, QWidget)
+                               QFrame, QRadioButton, QSpinBox, QSplitter, QTabWidget, QTreeView, QVBoxLayout, QWidget)
 
 from .. import macos, media
 from ..ai import clip, faces, vision_mac
@@ -23,41 +23,69 @@ BUTTONS = [("share", "Share"), ("email", "Email"), ("print", "Print"), ("export"
 
 # ====================================================================== Options
 
-def _tab():
-    w = QWidget()
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(16, 14, 16, 10)
-    lay.setSpacing(12)
-    return w, lay
+LABEL_W = 200     # every Options tab shares one alignment line: labels end here …
+CTRL_W = 280      # … and every control starts here, all the same width
 
 
-def _form_group(title):
-    box = QGroupBox(title)
-    f = QFormLayout(box)
-    f.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-    f.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-    f.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
-    f.setHorizontalSpacing(12)
-    f.setVerticalSpacing(10)
-    f.setContentsMargins(14, 12, 14, 12)
-    return box, f
+class _Page(QWidget):
+    """One Options tab: labels right-aligned to a shared centre line, controls left-aligned from it,
+    sections separated by a centred heading and a hairline."""
 
+    def __init__(self):
+        super().__init__()
+        self.g = QGridLayout(self)
+        self.g.setContentsMargins(20, 6, 20, 14)
+        self.g.setHorizontalSpacing(10)
+        self.g.setVerticalSpacing(9)
+        self.g.setColumnStretch(0, 1)
+        self.g.setColumnStretch(3, 1)
+        self.g.setColumnMinimumWidth(1, LABEL_W)
+        self.g.setColumnMinimumWidth(2, CTRL_W)
+        self._r = 0
+        self._sections = 0
 
-def _vbox_group(title):
-    box = QGroupBox(title)
-    v = QVBoxLayout(box)
-    v.setSpacing(8)
-    v.setContentsMargins(14, 12, 14, 12)
-    return box, v
+    def _next(self):
+        r = self._r
+        self._r += 1
+        return r
 
+    def heading(self, text):
+        if self._sections:
+            line = QFrame()
+            line.setFrameShape(QFrame.HLine)
+            line.setFrameShadow(QFrame.Plain)
+            line.setObjectName("OptSep")
+            self.g.addWidget(line, self._next(), 0, 1, 4)
+        self._sections += 1
+        h = QLabel(text)
+        h.setObjectName("OptHeading")
+        h.setAlignment(Qt.AlignHCenter)
+        self.g.addWidget(h, self._next(), 1, 1, 2)
 
-def _grid_group(title):
-    box = QGroupBox(title)
-    g = QGridLayout(box)
-    g.setHorizontalSpacing(18)
-    g.setVerticalSpacing(8)
-    g.setContentsMargins(14, 12, 14, 12)
-    return box, g
+    def row(self, label, *controls, fixed=True):
+        r = self._next()
+        lab = QLabel(label)
+        lab.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.g.addWidget(lab, r, 1)
+        if len(controls) == 1:
+            c = controls[0]
+            if fixed and isinstance(c, (QComboBox, QSpinBox, QLineEdit)):
+                c.setFixedWidth(CTRL_W)
+            self.g.addWidget(c, r, 2, Qt.AlignLeft | Qt.AlignVCenter)
+        else:
+            self.g.addWidget(_hrow(*controls), r, 2, Qt.AlignLeft | Qt.AlignVCenter)
+
+    def wide(self, widget, align=Qt.AlignHCenter):
+        self.g.addWidget(widget, self._next(), 1, 1, 2, align)
+
+    def note(self, text):
+        n = QLabel(text)
+        n.setObjectName("Muted")
+        n.setAlignment(Qt.AlignHCenter)
+        self.wide(n)
+
+    def finish(self):
+        self.g.setRowStretch(self._r, 1)
 
 
 def _hrow(*widgets):
@@ -71,10 +99,15 @@ def _hrow(*widgets):
     return w
 
 
-def _note(text):
-    n = QLabel(text)
-    n.setObjectName("Muted")
-    return n
+def _grid(items, cols):
+    w = QWidget()
+    g = QGridLayout(w)
+    g.setContentsMargins(0, 0, 0, 0)
+    g.setHorizontalSpacing(22)
+    g.setVerticalSpacing(7)
+    for i, it in enumerate(items):
+        g.addWidget(it, i // cols, i % cols)
+    return w
 
 
 class OptionsDialog(QDialog):
@@ -98,169 +131,171 @@ class OptionsDialog(QDialog):
         v.addWidget(tabs)
 
         # --- General
-        g, gl = _tab()
-        box, f = _form_group("Opening Photos")
+        g = _Page()
+        g.heading("Opening Photos")
         self.open_in = QComboBox()
         self.open_in.addItem("Photo Viewer", "viewer")
         self.open_in.addItem("Edit view", "editor")
         self.open_in.setCurrentIndex(0 if s.get("open_files_in") != "editor" else 1)
-        f.addRow("Open files from Finder in:", self.open_in)
+        g.row("Open files from Finder in:", self.open_in)
         self.caption = QComboBox()
         for k, label in (("none", "None"), ("filename", "Filename"), ("caption", "Caption"),
                          ("resolution", "Resolution"), ("date", "Date taken"), ("tags", "Tags")):
             self.caption.addItem(label, k)
         self.caption.setCurrentIndex(max(0, self.caption.findData(s.get("thumb_caption"))))
-        f.addRow("Thumbnail caption:", self.caption)
-        gl.addWidget(box)
-
-        box, f = _form_group("Library")
+        g.row("Thumbnail caption:", self.caption)
+        g.heading("Library")
         fm = QPushButton("Folder Manager…")
         fm.clicked.connect(self.folder_manager)
         sc = QPushButton("Rescan Now")
         sc.clicked.connect(self.rescan)
-        f.addRow("Watched folders:", _hrow(fm, sc))
-        path = QLabel(str(DATA_DIR))
+        for b_ in (fm, sc):
+            b_.setMinimumWidth(b_.sizeHint().width())      # never squeeze the button text
+        g.row("Watched folders:", fm, sc)
+        path = QLabel()
         path.setObjectName("Muted")
-        path.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        path.setWordWrap(True)
+        path.setToolTip(str(DATA_DIR))
         mv = QPushButton("Move…")
         mv.clicked.connect(self._move_db)
-        f.addRow("Database:", path)
-        f.addRow("", _hrow(mv))
-        gl.addWidget(box)
-
-        box, f = _form_group("Places")
+        mv.setMinimumWidth(mv.sizeHint().width())
+        avail = CTRL_W - mv.sizeHint().width() - 8
+        path.setText(path.fontMetrics().elidedText(str(DATA_DIR).replace(str(Path.home()), "~"), Qt.ElideMiddle, avail))
+        path.setFixedWidth(avail)
+        g.row("Database:", path, mv)
+        g.heading("Places")
         self.tiles = QCheckBox("Load OpenStreetMap tiles")
         self.tiles.setChecked(bool(s.get("map_tiles")))
-        f.addRow("Map:", self.tiles)
-        gl.addWidget(box)
-        gl.addStretch()
+        g.row("Map:", self.tiles)
+        g.finish()
         tabs.addTab(g, "General")
 
         # --- File types
-        ft, fl = _tab()
-        fl.addWidget(_note("Unchecked file types are skipped when Fotohaus scans your folders."))
+        ft = _Page()
         self.type_checks = {}
         skip = {e.lower() for e in (s.get("file_types") or [])}
-        for title, exts in (("Photos", sorted(media.IMAGE_EXT)), ("Camera RAW", sorted(media.RAW_EXT)),
-                            ("Videos", sorted(media.VIDEO_EXT))):
-            box, grid = _grid_group(title)
-            for i, ext in enumerate(exts):
+        for i, (title, exts) in enumerate((("Photos", sorted(media.IMAGE_EXT)), ("Camera RAW", sorted(media.RAW_EXT)),
+                                           ("Videos", sorted(media.VIDEO_EXT)))):
+            ft.heading(title)
+            boxes = []
+            for ext in exts:
                 cb = QCheckBox(ext.lstrip(".").upper())
                 cb.setChecked(ext not in skip)
                 self.type_checks[ext] = cb
-                grid.addWidget(cb, i // 6, i % 6)
-            fl.addWidget(box)
-        fl.addStretch()
+                boxes.append(cb)
+            ft.wide(_grid(boxes, 6))
+        ft.note("Unchecked file types are skipped when Fotohaus scans your folders.")
+        ft.finish()
         tabs.addTab(ft, "File Types")
 
         # --- Photo Viewer (file associations)
-        pv, pvl = _tab()
-        pvl.addWidget(_note("Double-click these files in Finder to open them in the Photo Viewer. "
-                            "Use ← and → to browse the folder, Esc to close."))
-        box, grid2 = _grid_group("Open with Fotohaus")
+        pv = _Page()
+        pv.heading("Open with Fotohaus")
         self.viewer_checks = {}
-        for i, (label, uti) in enumerate(macos.VIEWER_TYPES):
+        boxes = []
+        for label, uti in macos.VIEWER_TYPES:
             cb = QCheckBox(label)
             cur = macos.default_app_for_type(uti)
             cb.setChecked(bool(cur and cur.endswith("Fotohaus.app")))
             cb.setToolTip(f"Currently opens with: {os.path.basename(cur) if cur else 'unknown'}")
             self.viewer_checks[uti] = cb
-            grid2.addWidget(cb, i // 3, i % 3)
+            boxes.append(cb)
+        pv.wide(_grid(boxes, 3))
         allb = QPushButton("Select All")
         allb.clicked.connect(lambda: [c.setChecked(True) for c in self.viewer_checks.values()])
         apply_ = QPushButton("Make Fotohaus the Default")
         apply_.clicked.connect(self._apply_viewer)
-        grid2.addWidget(_hrow(allb, apply_), grid2.rowCount(), 0, 1, 3)
-        pvl.addWidget(box)
-        pvl.addWidget(_note("Or right-click any photo in Finder and choose Open With ▸ Fotohaus."))
-        pvl.addStretch()
+        for b_ in (allb, apply_):
+            b_.setMinimumWidth(b_.sizeHint().width())
+        pv.wide(_hrow(allb, apply_))
+        pv.note("Use ← and → to browse the folder, Esc to close.")
+        pv.note("Or right-click any photo in Finder and choose Open With ▸ Fotohaus.")
+        pv.finish()
         tabs.addTab(pv, "Photo Viewer")
 
         # --- Name tags & metadata
-        md, mf = _tab()
-        box, v1 = _vbox_group("Picasa Files")
-        self.write_ini = QCheckBox("Keep .picasa.ini files in sync (stars, captions, albums, name tags, edits)")
+        md = _Page()
+        md.heading("Picasa Files")
+        self.write_ini = QCheckBox("Keep .picasa.ini files in sync")
+        self.write_ini.setToolTip("Stars, captions, albums, name tags and edits")
         self.write_ini.setChecked(bool(s.get("write_picasa_ini")))
-        v1.addWidget(self.write_ini)
+        md.row("Sidecar files:", self.write_ini)
         imp = QPushButton("Import contacts.xml…")
         imp.clicked.connect(self._contacts)
-        v1.addWidget(_hrow(imp))
-        mf.addWidget(box)
-        box, v2 = _vbox_group("Inside JPEG Files")
+        imp.setMinimumWidth(imp.sizeHint().width())
+        md.row("Name tags:", imp)
+        md.heading("Inside JPEG Files")
         self.write_meta = QCheckBox("Store captions and tags (IPTC/XMP)")
         self.write_meta.setChecked(bool(s.get("write_meta_in_files")))
+        md.row("Captions and tags:", self.write_meta)
         self.write_faces = QCheckBox("Store name tags (XMP face regions)")
         self.write_faces.setChecked(bool(s.get("write_faces_in_files")))
-        v2.addWidget(self.write_meta)
-        v2.addWidget(self.write_faces)
-        v2.addWidget(_note("The image itself is never re-compressed."))
-        mf.addWidget(box)
-        mf.addStretch()
+        md.row("Name tags:", self.write_faces)
+        md.note("The image itself is never re-compressed.")
+        md.finish()
         tabs.addTab(md, "Name Tags && Metadata")
 
         # --- Intelligence
-        ai, af = _tab()
-        af.addWidget(_note("Everything here runs on your Mac. No photo ever leaves your computer."))
-        box, v1 = _vbox_group("Recognition")
+        ai = _Page()
+        ai.heading("Recognition")
         self.faces_cb = QCheckBox("Find and recognize faces")
         self.faces_cb.setChecked(bool(s.get("faces_enabled")))
         self.faces_cb.setEnabled(faces.available())
-        self.vision_cb = QCheckBox("Recognize objects, scenes and text (Apple Vision)")
+        ai.row("Faces:", self.faces_cb)
+        self.vision_cb = QCheckBox("Objects, scenes and text")
+        self.vision_cb.setToolTip("Uses Apple Vision, on your Mac")
         self.vision_cb.setChecked(bool(s.get("vision_enabled")))
         self.vision_cb.setEnabled(vision_mac.available())
-        v1.addWidget(self.faces_cb)
-        v1.addWidget(self.vision_cb)
+        ai.row("Apple Vision:", self.vision_cb)
         rb = QPushButton("Re-analyze All Photos")
         rb.clicked.connect(self.reindex)
-        v1.addWidget(_hrow(rb))
-        af.addWidget(box)
-        box, v2 = _vbox_group("Natural-Language Search")
-        self.clip_cb = QCheckBox("Search by description, e.g. “kids playing in the snow”")
+        rb.setMinimumWidth(rb.sizeHint().width())
+        ai.row("Library:", rb)
+        ai.heading("Natural-Language Search")
+        self.clip_cb = QCheckBox("Search by description")
+        self.clip_cb.setToolTip("For example “kids playing in the snow”")
         self.clip_cb.setChecked(bool(s.get("clip_enabled")))
-        v2.addWidget(self.clip_cb)
-        self.clip_btn = QPushButton("Download Model (155 MB)")
+        ai.row("Search:", self.clip_cb)
+        self.clip_btn = QPushButton("Download (155 MB)")
         self.clip_btn.clicked.connect(self.download_clip)
         self.clip_btn.setEnabled(not clip.downloaded())
-        self.clip_status = QLabel("Model installed." if clip.downloaded() else "Model not downloaded yet.")
+        self.clip_btn.setMinimumWidth(self.clip_btn.sizeHint().width())
+        self.clip_status = QLabel("Model installed." if clip.downloaded() else "Not downloaded yet.")
         self.clip_status.setObjectName("Muted")
-        v2.addWidget(_hrow(self.clip_btn, self.clip_status))
-        af.addWidget(box)
-        af.addStretch()
+        ai.row("Model:", self.clip_btn, self.clip_status)
+        ai.note("Everything here runs on your Mac. No photo ever leaves your computer.")
+        ai.finish()
         tabs.addTab(ai, "Intelligence")
 
         # --- Email & Slideshow
-        es, el = _tab()
-        box, f = _form_group("Slideshow")
+        es = _Page()
+        es.heading("Slideshow")
         self.secs = QSpinBox()
         self.secs.setRange(1, 60)
         self.secs.setSuffix(" seconds")
         self.secs.setValue(int(s.get("slideshow_seconds") or 4))
-        f.addRow("Show each photo for:", self.secs)
+        es.row("Show each photo for:", self.secs)
         self.trans = QComboBox()
         for k, label in (("dissolve", "Dissolve"), ("panzoom", "Pan and zoom"), ("wipe", "Wipe"),
                          ("shrink", "Shrink"), ("none", "None"), ("random", "Random")):
             self.trans.addItem(label, k)
         self.trans.setCurrentIndex(max(0, self.trans.findData(s.get("slideshow_transition"))))
-        f.addRow("Transition:", self.trans)
+        es.row("Transition:", self.trans)
         self.capt = QCheckBox("Show captions")
         self.capt.setChecked(bool(s.get("slideshow_captions")))
-        f.addRow("", self.capt)
-        el.addWidget(box)
-        box, f = _form_group("Email")
+        es.row("Captions:", self.capt)
+        es.heading("Email")
         self.email = QComboBox()
         for label, px in (("Small (640 px)", 640), ("Medium (800 px)", 800), ("Large (1024 px)", 1024),
                           ("Extra large (1600 px)", 1600), ("Original size", 0)):
             self.email.addItem(label, px)
         self.email.setCurrentIndex(max(0, self.email.findData(int(s.get("email_size") or 800))))
-        f.addRow("Picture size:", self.email)
-        el.addWidget(box)
-        el.addStretch()
+        es.row("Picture size:", self.email)
+        es.finish()
         tabs.addTab(es, "Email && Slideshow")
 
         # --- Buttons
-        bt, bl = _tab()
-        box, v1 = _vbox_group("Buttons at the Bottom of the Window")
+        bt = _Page()
+        bt.heading("Buttons at the Bottom of the Window")
         self.btn_list = QListWidget()
         cur = list(s.get("button_bar") or [])
         order = cur + [k for k, _ in BUTTONS if k not in cur]
@@ -273,11 +308,11 @@ class OptionsDialog(QDialog):
             self.btn_list.addItem(it)
         self.btn_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.btn_list.setFixedHeight(self.btn_list.sizeHintForRow(0) * len(order) + 6)
+        self.btn_list.setFixedWidth(LABEL_W + CTRL_W + 10)
         self.btn_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        v1.addWidget(self.btn_list)
-        v1.addWidget(_note("Check the buttons to show, and drag to change their order."))
-        bl.addWidget(box)
-        bl.addStretch()
+        bt.wide(self.btn_list)
+        bt.note("Check the buttons to show, and drag to change their order.")
+        bt.finish()
         tabs.addTab(bt, "Buttons")
 
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)

@@ -59,6 +59,8 @@ def stylesheet() -> str:
     QLabel#Section {{ color: {sec}; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }}
     QLabel#Title {{ font-size: 18px; font-weight: 600; }}
     QLabel#Muted {{ color: {sec}; }}
+    QLabel#OptHeading {{ color: {sec}; font-size: 11px; font-weight: 600; padding-top: 4px; }}
+    QFrame#OptSep {{ color: {border}; background: {border}; max-height: 1px; border: none; margin: 4px 0; }}
     QWidget#RightPanel {{ background: {bar_bg}; border-left: 1px solid {border}; }}
     QFrame#InfoCard {{ background: {card_bg}; border: 1px solid {border}; border-radius: 10px; }}
     QFrame#InfoCard QLabel {{ background: transparent; border: none; }}
