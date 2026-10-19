@@ -156,22 +156,22 @@ class OptionsDialog(QDialog):
         self.caption.setCurrentIndex(max(0, self.caption.findData(s.get("thumb_caption"))))
         g.row("Thumbnail caption:", self.caption)
         g.heading("Library")
-        fm = QPushButton("Folder Manager…")
+        fm = QPushButton("Folder Manager")
         fm.clicked.connect(self.folder_manager)
         sc = QPushButton("Rescan Now")
         sc.clicked.connect(self.rescan)
-        for b_ in (fm, sc):
-            b_.setMinimumWidth(b_.sizeHint().width())      # never squeeze the button text
+        mv = QPushButton("Move…")
+        mv.clicked.connect(self._move_db)
+        # three equal buttons: Folder Manager | Rescan Now on one row, Move… under Rescan Now
+        bw = max((CTRL_W - 8) // 2, *(b_.sizeHint().width() for b_ in (fm, sc, mv)))
+        for b_ in (fm, sc, mv):
+            b_.setFixedWidth(bw)
         g.row("Watched folders:", fm, sc)
         path = QLabel()
         path.setObjectName("Muted")
         path.setToolTip(str(DATA_DIR))
-        mv = QPushButton("Move…")
-        mv.clicked.connect(self._move_db)
-        mv.setMinimumWidth(mv.sizeHint().width())
-        avail = CTRL_W - mv.sizeHint().width() - 8
-        path.setText(path.fontMetrics().elidedText(str(DATA_DIR).replace(str(Path.home()), "~"), Qt.ElideMiddle, avail))
-        path.setFixedWidth(avail)
+        path.setText(path.fontMetrics().elidedText(str(DATA_DIR).replace(str(Path.home()), "~"), Qt.ElideMiddle, bw))
+        path.setFixedWidth(bw)
         g.row("Database:", path, mv)
         g.heading("Places")
         self.tiles = QCheckBox("Load OpenStreetMap tiles")
