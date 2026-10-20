@@ -11,7 +11,9 @@ touching your originals, and never uploads a single pixel.
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%E2%98%95-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/aelnagish)
 
-<img src="docs/library.jpg" alt="Fotohaus library view: photos grouped by folder, with a sidebar, info panel and photo tray" width="100%">
+**[Website](https://aelnagish.github.io/Fotohaus/)** · **[Download](https://github.com/aelnagish/Fotohaus/releases/latest)** · **[Install guide](INSTALL.md)**
+
+<img src="docs/demo.gif" alt="Fotohaus library: scrolling through photos grouped by folder and selecting them, with details in the info panel" width="100%">
 
 </div>
 
