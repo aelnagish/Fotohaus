@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Installation help ("damaged" or "could not verify")
+    url: https://github.com/aelnagish/fotohaus/blob/main/INSTALL.md#first-launch
+    about: macOS blocks Fotohaus the first time. The fix takes one step.

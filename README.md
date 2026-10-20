@@ -7,7 +7,7 @@
 A fast, private photo organizer for macOS that finds faces, reads text in photos, edits without
 touching your originals, and never uploads a single pixel.
 
-[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple)](#install)
+[![macOS](https://img.shields.io/badge/macOS%2014%2B-Apple%20Silicon-black?logo=apple)](#install)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%E2%98%95-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/aelnagish)
 
@@ -55,6 +55,38 @@ on your Mac from a built-in atlas, so you can simply search for a town.
 <div align="center">
 <img src="docs/memories.jpg" alt="Fotohaus Memories: photos from this day two, three and four years ago, with the place shown in the info panel" width="100%">
 </div>
+
+## Some photos are just for you
+
+Select pictures and choose **Move to Private**. They vanish from the library, search, Memories,
+People and Places, and the **Private** collection opens only with **Touch ID** (or your Mac
+password). It locks again when you quit.
+
+Two quieter places help keep the library tidy:
+
+- **Archive** tucks away screenshots, receipts and the photos you want to keep but not see every
+  day. They stay on disk and come back with one click.
+- **Recently Deleted** holds anything you delete for **30 days**, so a slip of the finger is never
+  final. Only then do files move to the Mac's Trash.
+
+## Find anyone, and anything
+
+Name a face once and Fotohaus suggests the same person across the years, all on your Mac. Search
+understands people, places, tags and dates (`person:anna place:zermatt year:2019`), the objects and
+scenes in a photo ("dog", "beach"), and even the **words in it**: type "invoice" or a street sign
+and find the picture.
+
+## Bursts, RAW pairs and Live Photos, tidied up
+
+A burst of twelve near-identical shots, the RAW and JPEG of the same moment, the short video
+behind an iPhone Live Photo: Fotohaus folds each into one **stack** with a small badge, so the
+library shows moments, not clutter. Open a Live Photo and press **L** to see it move.
+
+## Coming from Picasa?
+
+Point Fotohaus at your old Picasa folders and your stars, captions, albums, face tags and edits
+are there, read straight from the `.picasa.ini` files Picasa left behind. Fotohaus keeps writing
+them, so nothing is locked in.
 
 ## What it does
 
@@ -115,15 +147,14 @@ on your Mac from a built-in atlas, so you can simply search for a town.
 (CR2, CR3, NEF, ARW, DNG, RAF and more) and common video formats, colour-managed for accurate
 display. Captions and tags can be written into the files themselves, so other apps see them too.
 
-**Coming from Picasa?** Fotohaus reads and writes `.picasa.ini` files, so your stars, captions,
-albums, face tags and edits come straight across.
-
 **Comes with a command line, too.** `fotohaus-cli search "beach 2019"` searches from the Terminal,
 and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize your library.
 
 ## Install
 
-1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases) (Apple Silicon Macs).
+Fotohaus runs on Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.
+
+1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases).
 2. Open the disk image and drag **Fotohaus** into **Applications**.
 3. Open Fotohaus. It isn't notarized by Apple yet, so macOS blocks it the first time:
    - If macOS says it **"is damaged and can't be opened"**, click *Cancel*, then run this once in
@@ -132,6 +163,9 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
    - If it says it **"could not verify"** Fotohaus, open *System Settings ▸ Privacy & Security*,
      scroll down and click **Open Anyway** next to the message about Fotohaus.
 4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Options ▸ Photo Viewer*.
+
+The full guide, including the command line, the Claude (MCP) setup and how to uninstall, is in
+[INSTALL.md](INSTALL.md).
 
 ### Run from source
 
@@ -145,7 +179,8 @@ python -m fotohaus.cli --help # command line
 ```
 
 Your library database lives in `~/Library/Application Support/Fotohaus` (set `FOTOHAUS_HOME` to use
-a different place). Run the tests with `pip install -r requirements-dev.txt && python tests/test_fotohaus.py`. To build the app and disk
+a different place). Run the tests with `pip install -r requirements-dev.txt`, then `python tests/test_fotohaus.py` and
+`python tests/test_review.py`. To build the app and disk
 image, see `packaging/build_mac_app.py`.
 
 ## Support
@@ -164,7 +199,8 @@ or not, you must pass on the same freedoms and the source code. Copyright © 202
 
 The app bundles third-party components under their own licenses, listed in
 [`packaging/THIRD_PARTY_NOTICES.md`](packaging/THIRD_PARTY_NOTICES.md). The source code of the
-GPL libraries inside the app (FFmpeg, x264, x265) is attached to each release.
+GPL libraries inside the app (FFmpeg, x264, x265) is attached to each release as
+`fotohaus-1.0.0-gpl-sources.tar`.
 
 <sub>Screenshots use freely licensed sample images from the scikit-image, imageio and Pillow
 projects. Fotohaus is an independent project.</sub>

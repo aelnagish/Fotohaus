@@ -7,3 +7,4 @@ dist/
 .DS_Store
 fotohaus/models/clip*/
 _to_delete/
+.ruff_cache/

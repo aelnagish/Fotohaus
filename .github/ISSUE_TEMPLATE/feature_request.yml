@@ -1,0 +1,11 @@
+name: Idea or feature request
+description: Suggest something that would make Fotohaus better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Fotohaus to do?
+      description: Describe the everyday situation where it would help.
+    validations:
+      required: true
