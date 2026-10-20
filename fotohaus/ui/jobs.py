@@ -93,9 +93,9 @@ class JobManager(QObject):
 # ------------------------------------------------------------------ thumbnails
 
 class _ThumbTask(QRunnable):
-    def __init__(self, loader, row, size):
+    def __init__(self, loader, row, size, key):
         super().__init__()
-        self.loader, self.row, self.size = loader, row, size
+        self.loader, self.row, self.size, self.key = loader, row, size, key
 
     def run(self):
         img = QImage()
@@ -104,12 +104,12 @@ class _ThumbTask(QRunnable):
             img = QImage(str(p))
         except Exception:
             pass
-        self.loader._loaded.emit(self.row["id"], self.size, img)
+        self.loader._loaded.emit(self.key, img)
 
 
 class ThumbLoader(QObject):
     loaded = Signal(int)
-    _loaded = Signal(int, int, QImage)
+    _loaded = Signal(object, QImage)
 
     def __init__(self, parent=None, capacity: int = 4000):
         super().__init__(parent)
@@ -118,7 +118,6 @@ class ThumbLoader(QObject):
         self.cache: OrderedDict = OrderedDict()
         self.pending: set = set()
         self.capacity = capacity
-        self._keys_by_id: dict = {}
         self._loaded.connect(self._on_loaded)
 
     def _key(self, row, size):
@@ -131,16 +130,14 @@ class ThumbLoader(QObject):
             self.cache.move_to_end(k)
             return pm
         if k not in self.pending:
+            # the key travels with the task, so a thumbnail requested again after an edit (new key)
+            # is never filed under the old one
             self.pending.add(k)
-            self._keys_by_id[(row["id"], size)] = k
-            self.pool.start(_ThumbTask(self, row, size))
+            self.pool.start(_ThumbTask(self, row, size, k))
         return None
 
-    @Slot(int, int, QImage)
-    def _on_loaded(self, pid, size, img):
-        k = self._keys_by_id.pop((pid, size), None)
-        if k is None:
-            return
+    @Slot(object, QImage)
+    def _on_loaded(self, k, img):
         self.pending.discard(k)
         if img.isNull():
             img = QImage(8, 8, QImage.Format_RGB32)
@@ -148,7 +145,7 @@ class ThumbLoader(QObject):
         self.cache[k] = QPixmap.fromImage(img)
         while len(self.cache) > self.capacity:
             self.cache.popitem(last=False)
-        self.loaded.emit(pid)
+        self.loaded.emit(k[0])
 
     def invalidate(self, pid: int):
         for k in [k for k in self.cache if k[0] == pid]:

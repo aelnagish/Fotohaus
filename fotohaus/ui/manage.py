@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QDir, QIdentityProxyModel, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QDir, QIdentityProxyModel, QObject, QRectF, QRunnable, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFileDialog, QFileSystemModel, QFormLayout, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
@@ -558,7 +558,7 @@ class OptionsDialog(QDialog):
             set_data_dir(d)
             QMessageBox.information(self, "Move Database", "The database was copied. Quit and reopen Fotohaus to "
                                     "use the new location.")
-        except OSError as e:
+        except Exception as e:          # OSError, or sqlite3.Error from the database copy
             QMessageBox.warning(self, "Move Database", str(e))
 
     # ---- appearance: previewed live, kept on OK, undone on Cancel
@@ -729,7 +729,9 @@ class FolderManagerDialog(QDialog):
 
     def _photo_count(self, path):
         p = path.rstrip(os.sep)
-        return self.lib.db.scalar("SELECT COUNT(*) FROM photos WHERE path LIKE ?", (p + os.sep + "%",), default=0)
+        from ..db import under
+        w, a = under("path", p, include_self=False)
+        return self.lib.db.scalar(f"SELECT COUNT(*) FROM photos WHERE {w}", a, default=0)
 
     @staticmethod
     def _nice(path):
@@ -904,12 +906,36 @@ class FolderManagerDialog(QDialog):
 
 # ====================================================================== Import
 
+class _ThumbSig(QObject):
+    done = Signal(int, int, QImage)      # generation, row, image
+
+
+class _ImportThumb(QRunnable):
+    def __init__(self, sig, gen, i, path):
+        super().__init__()
+        self.sig, self.gen, self.i, self.path = sig, gen, i, path
+
+    def run(self):
+        img = QImage()
+        try:
+            from .editor import pil_to_qimage
+            img = pil_to_qimage(media.load_image(self.path, max_dim=160))
+        except Exception:
+            pass
+        self.sig.done.emit(self.gen, self.i, img)
+
+
 class ImportDialog(QDialog):
     def __init__(self, lib, jobs, parent=None):
         super().__init__(parent)
         from .. import importer
         self.lib, self.jobs = lib, jobs
         self.items = []
+        from PySide6.QtCore import QThreadPool
+        self._pool = QThreadPool(self)
+        self._pool.setMaxThreadCount(3)
+        self._thumb_sig = _ThumbSig()
+        self._thumb_sig.done.connect(self._thumb_ready)
         self.setWindowTitle("Import")
         self.resize(940, 640)
         v = QVBoxLayout(self)
@@ -1002,16 +1028,26 @@ class ImportDialog(QDialog):
             if it.duplicate:
                 w.setToolTip("Already in your library")
                 w.setForeground(QColor("#999"))
-            try:
-                if media.kind_of(it.path) != "video":
-                    im = media.load_image(it.path, max_dim=160)
-                    from .editor import pil_to_qimage
-                    w.setIcon(QIcon(QPixmap.fromImage(pil_to_qimage(im))))
-            except Exception:
-                pass
             self.grid.addItem(w)
         self.grid.blockSignals(False)
         self._count()
+        # thumbnails load in the background: a card with thousands of pictures (or RAW files) would
+        # otherwise freeze the window while every preview is decoded
+        self._thumb_gen = getattr(self, "_thumb_gen", 0) + 1
+        for i, it in enumerate(items):
+            if media.kind_of(it.path) != "video":
+                self._pool.start(_ImportThumb(self._thumb_sig, self._thumb_gen, i, it.path))
+
+    def _thumb_ready(self, gen, i, img):
+        if gen == getattr(self, "_thumb_gen", 0) and 0 <= i < self.grid.count() and not img.isNull():
+            self.grid.blockSignals(True)
+            self.grid.item(i).setIcon(QIcon(QPixmap.fromImage(img)))
+            self.grid.blockSignals(False)
+
+    def done(self, r):
+        self._thumb_gen = getattr(self, "_thumb_gen", 0) + 1     # ignore thumbnails still loading
+        self._pool.clear()
+        super().done(r)
 
     def _apply_dupes(self, on):
         for i, it in enumerate(self.items):

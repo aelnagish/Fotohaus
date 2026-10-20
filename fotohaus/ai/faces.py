@@ -116,14 +116,16 @@ def from_blob(b: bytes) -> np.ndarray:
 
 # ------------------------------------------------------------------ recognition / clustering
 
-def update_suggestions_and_clusters(lib) -> dict:
-    """Suggest names for unconfirmed faces and cluster the rest. Returns stats."""
+def update_suggestions_and_clusters(lib, cluster: bool = True) -> dict:
+    """Suggest names for unconfirmed faces and (optionally) cluster the rest. Returns stats."""
     db = lib.db
-    rows = db.q("SELECT id, person_id, confirmed, embedding FROM faces WHERE embedding IS NOT NULL AND ignored=0")
+    # faces whose embedding couldn't be computed are stored with an empty blob; they can't be compared
+    rows = db.q("SELECT id, person_id, confirmed, suggestion, embedding FROM faces WHERE embedding IS NOT NULL "
+                "AND length(embedding) > 0 AND ignored=0")
     if not rows:
         return {"suggested": 0, "clusters": 0}
     known: dict[int, list[np.ndarray]] = {}
-    unknown_ids, unknown_vecs = [], []
+    unknown_ids, unknown_vecs, rejected = [], [], set()
     for r in rows:
         v = from_blob(r["embedding"])
         if r["person_id"] and r["confirmed"]:
@@ -131,6 +133,8 @@ def update_suggestions_and_clusters(lib) -> dict:
         elif not r["confirmed"]:
             unknown_ids.append(r["id"])
             unknown_vecs.append(v)
+            if r["suggestion"] is not None and r["suggestion"] < 0:
+                rejected.add(r["id"])        # the user said "not this person": don't suggest again
     stats = {"suggested": 0, "clusters": 0}
     if not unknown_ids:
         return stats
@@ -149,7 +153,7 @@ def update_suggestions_and_clusters(lib) -> dict:
     updates = []
     remaining = []
     for i, fid in enumerate(unknown_ids):
-        if best_person[i] >= 0 and best_sim[i] >= MATCH_THRESHOLD:
+        if best_person[i] >= 0 and best_sim[i] >= MATCH_THRESHOLD and fid not in rejected:
             updates.append((int(best_person[i]), float(best_sim[i]), fid))
         else:
             remaining.append(i)
@@ -159,29 +163,41 @@ def update_suggestions_and_clusters(lib) -> dict:
         c.executemany("UPDATE faces SET person_id=?, suggestion=?, cluster=NULL WHERE id=? AND confirmed=0", updates)
         c.commit()
     stats["suggested"] = len(updates)
-    # greedy clustering of the remaining unknown faces
-    centroids: list[np.ndarray] = []
+    if not cluster:
+        return stats
+    # greedy clustering of the remaining unknown faces; centroids live in one growing matrix so each
+    # face costs a single matrix-vector product (stacking a new matrix per face is quadratic)
+    dim = U.shape[1]
+    cap = 256
+    C = np.zeros((cap, dim), dtype=np.float32)
+    k = 0
     counts: list[int] = []
     assign = []
     for i in remaining:
         v = U[i]
-        if centroids:
-            C = np.stack(centroids)
-            sims = C @ v
+        if k:
+            sims = C[:k] @ v
             j = int(np.argmax(sims))
             if sims[j] >= CLUSTER_THRESHOLD:
                 n = counts[j]
-                c_new = centroids[j] * n + v
-                centroids[j] = c_new / (np.linalg.norm(c_new) + 1e-9)
+                c_new = C[j] * n + v
+                C[j] = c_new / (np.linalg.norm(c_new) + 1e-9)
                 counts[j] += 1
                 assign.append((j, unknown_ids[i]))
                 continue
-        centroids.append(v.copy())
+        if k == cap:
+            cap *= 2
+            C2 = np.zeros((cap, dim), dtype=np.float32)
+            C2[:k] = C[:k]
+            C = C2
+        C[k] = v
+        k += 1
         counts.append(1)
-        assign.append((len(centroids) - 1, unknown_ids[i]))
+        assign.append((k - 1, unknown_ids[i]))
     with db.write_lock:
         c = db.conn
-        c.executemany("UPDATE faces SET cluster=?, person_id=NULL, suggestion=NULL WHERE id=?",
+        c.executemany("UPDATE faces SET cluster=?, person_id=NULL, "
+                      "suggestion=CASE WHEN suggestion < 0 THEN suggestion END WHERE id=?",
                       [(cl, fid) for cl, fid in assign])
         c.commit()
     stats["clusters"] = sum(1 for n in counts if n > 1)

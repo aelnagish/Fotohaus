@@ -221,17 +221,17 @@ class GiftDiskDialog(QDialog):
 
 
 SHORTCUTS = [
-    ("Library", [("⌘O", "Add folder"), ("⌘F", "Search"), ("⌘A", "Select all"), ("⌘⇧A", "Clear selection"),
-                 ("⌘8", "Star / unstar"), ("⌘[  /  ⌘]", "Rotate counterclockwise / clockwise"),
+    ("Library", [("⌘O", "Add folder"), ("⌘F", "Search"), ("⌘A", "Select all"), ("⌥⌘A", "Clear selection"),
+                 ("⇧⌘A", "Archive / unarchive"), ("⌘8", "Star / unstar"), ("⌘[  /  ⌘]", "Rotate counterclockwise / clockwise"),
                  ("⌘T", "Add tag"), ("⌘K", "Hold selection in photo tray"), ("⌘⇧C / ⌘⇧V", "Copy / paste all effects"),
-                 ("⌘X / ⌘C / ⌘V", "Cut / copy / paste pictures"), ("⌘⌫", "Move to Trash"),
+                 ("⌘X / ⌘C / ⌘V", "Cut / copy / paste pictures"), ("⌘⌫", "Delete (kept 30 days in Recently Deleted)"),
                  ("Return", "Edit picture"), ("⌘Return", "Slideshow"), ("⌘= / ⌘-", "Larger / smaller thumbnails"),
                  ("⌘1 – ⌘5", "Library, People, Places, Duplicates, Timeline"), ("⌘I", "Info panel")]),
     ("Edit view", [("← / →", "Previous / next picture"), ("⌘Z / ⌘⇧Z", "Undo / redo"), ("Esc", "Back to Library"),
                    ("Double-click", "Fit / 100%"), ("O", "Show overflow pixels")]),
-    ("Photo Viewer", [("← / →, Space", "Previous / next"), ("Wheel, + / −", "Zoom"), ("0", "Fit"),
+    ("Photo Viewer", [("← / →, Space", "Previous / next"), ("Wheel, pinch, + / −", "Zoom"), ("0", "Fit"),
                       ("[ / ]", "Rotate"), ("⌘8", "Star"), ("I", "Info"), ("Return", "Edit in Fotohaus"),
-                      ("⌫", "Move to Trash"), ("Esc / click outside", "Close")]),
+                      ("⌫", "Delete"), ("Esc / click outside", "Close")]),
     ("Slideshow", [("Space", "Pause / play"), ("← / →", "Previous / next"), ("↑ / ↓", "Slower / faster"),
                    ("⌘8", "Star"), ("Esc", "Exit")]),
 ]

@@ -75,7 +75,7 @@ class Indexer:
                 if progress:
                     progress(done, total, "Analyzing photos")
                 if flags["faces"] and done % 512 < 64:
-                    faces.update_suggestions_and_clusters(lib)
+                    faces.update_suggestions_and_clusters(lib, cluster=False)   # full clustering at the end
                     lib.emit("people")
         self._embed_imported_faces(flags, should_stop)
         if flags["faces"]:

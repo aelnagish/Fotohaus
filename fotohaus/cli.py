@@ -100,7 +100,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("export")
     p.add_argument("--to", required=True)
     p.add_argument("--size", type=int)
-    p.add_argument("--format", default="JPEG")
+    p.add_argument("--format", default="JPEG", type=str.upper,
+                   choices=["JPEG", "PNG", "WEBP", "HEIF", "ORIGINAL"])
     p.add_argument("refs", nargs="+")
     sub.add_parser("stats")
     sub.add_parser("mcp")
@@ -153,7 +154,7 @@ def main(argv=None) -> int:
             print("  ".join(r["path"] for r in g))
     elif a.cmd == "export":
         from .exporter import ExportOptions, export_photo
-        opts = ExportOptions(dest=a.to, max_size=a.size, fmt=a.format.upper())
+        opts = ExportOptions(dest=a.to, max_size=a.size, fmt=a.format)
         for r in lib.photos_by_ids(_ids(lib, a.refs)):
             print(export_photo(r, opts))
     elif a.cmd == "stats":
@@ -235,8 +236,11 @@ def _mcp_call(lib, name, args):
 
 def run_mcp() -> int:
     from . import __version__
-    lib = _lib()
+    # stdout carries the JSON-RPC stream: anything else printed (warnings from libraries, progress)
+    # must go to stderr or the client sees a corrupt message
     out = sys.stdout
+    sys.stdout = sys.stderr
+    lib = _lib()
     for line in sys.stdin:
         line = line.strip()
         if not line:

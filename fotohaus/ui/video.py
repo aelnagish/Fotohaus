@@ -50,8 +50,9 @@ class VideoPlayer(QWidget):
         col = theme.fg() if not dark else None
         from PySide6.QtGui import QColor
         icol = col or QColor("#f0f0f0")
+        self._icol = None if not dark else icol    # None: follow the theme's text colour
         self.play_btn = QToolButton()
-        self.play_btn.setIcon(theme.icon("play", icol))
+        self.play_btn.setIcon(theme.icon("play", self._icol))
         self.play_btn.setAutoRaise(True)
         self.play_btn.clicked.connect(self.toggle)
         h.addWidget(self.play_btn)
@@ -122,8 +123,8 @@ class VideoPlayer(QWidget):
             self.player.play()
 
     def _state(self, st):
-        from PySide6.QtGui import QColor
-        self.play_btn.setIcon(theme.icon("pause" if st == QMediaPlayer.PlayingState else "play", QColor("#f0f0f0")))
+        # light controls on the dark viewer, theme-coloured ones in the editor (white would vanish there)
+        self.play_btn.setIcon(theme.icon("pause" if st == QMediaPlayer.PlayingState else "play", self._icol))
 
     def _pos(self, p):
         if not self.pos.isSliderDown():

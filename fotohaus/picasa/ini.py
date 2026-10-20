@@ -171,6 +171,11 @@ class PicasaIni:
         if not self.dirty:
             return
         lines: list[str] = []
+        text_all = "".join(k + v for kv in self.sections.values() for k, v in kv.items()) + "".join(self.sections)
+        if not text_all.isascii() and self.section("encoding") is None:
+            # Picasa reads non-ASCII text as UTF-8 only when the file says so (it wrote this itself)
+            self.sections = {"encoding": {"utf8": "1"}, **self.sections}
+            self._keys["encoding"] = "encoding"
         for name, kv in self.sections.items():
             if not kv and not name.startswith("."):
                 continue

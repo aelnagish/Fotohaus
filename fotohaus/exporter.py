@@ -145,18 +145,6 @@ def _framed(im: Image.Image, border: str, caption: str = "") -> Image.Image:
     return out
 
 
-def _paste_shadowed(canvas: Image.Image, tile: Image.Image, x: int, y: int, shadow: bool):
-    if shadow:
-        alpha = tile.split()[-1].point(lambda v: 90 if v else 0)
-        off = max(3, tile.width // 50)
-        sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-        sh.paste((0, 0, 0, 255), (x + off, y + off), alpha)
-        from PIL import ImageFilter
-        sh = sh.filter(ImageFilter.GaussianBlur(off))
-        canvas.alpha_composite(sh)
-    canvas.alpha_composite(tile, (max(0, x), max(0, y))) if x >= 0 and y >= 0 else canvas.paste(tile, (x, y), tile)
-
-
 def make_collage(rows, out_path: str, width: int = 3000, height: int = 2000, layout: str = "mosaic",
                  spacing: int = 12, background=(255, 255, 255), seed: int = 1, border: str = "none",
                  captions: bool = False, background_row=None, shadows: bool = False) -> Path:

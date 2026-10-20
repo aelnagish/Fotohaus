@@ -125,9 +125,12 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
 
 1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases) (Apple Silicon Macs).
 2. Open the disk image and drag **Fotohaus** into **Applications**.
-3. Open Fotohaus. Because it isn't notarized by Apple yet, macOS blocks it the first time: open
-   *System Settings ▸ Privacy & Security*, scroll down and click **Open Anyway** next to the
-   message about Fotohaus. You only need to do this once.
+3. Open Fotohaus. It isn't notarized by Apple yet, so macOS blocks it the first time:
+   - If macOS says it **"is damaged and can't be opened"**, click *Cancel*, then run this once in
+     Terminal: `xattr -cr /Applications/Fotohaus.app`. Nothing is wrong with the app; this is how
+     macOS treats apps from the internet that aren't notarized.
+   - If it says it **"could not verify"** Fotohaus, open *System Settings ▸ Privacy & Security*,
+     scroll down and click **Open Anyway** next to the message about Fotohaus.
 4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Options ▸ Photo Viewer*.
 
 ### Run from source

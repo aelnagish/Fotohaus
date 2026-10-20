@@ -10,12 +10,12 @@ Layout:
 Python finds its stdlib by walking up from the executable (Contents/MacOS -> Contents/lib), and
 `sitecustomize.py` starts the GUI when the binary is launched without arguments (from Finder).
 
-Requirements (Linux): python3.12 (for .pyc), pip, llvm-lipo, xorriso, libdmg-hfsplus `dmg`,
-optional `rcodesign` for ad-hoc signing.
+Requirements (Linux): python3.12 (for .pyc), pip, lief, llvm-lipo, mkfs.hfsplus (hfsprogs) and Mozilla's
+libdmg-hfsplus (`hfsplus` and `dmg`), and `rcodesign` for ad-hoc signing (required on Apple Silicon).
 
 Usage:
   python3 packaging/build_mac_app.py --python-tar cpython-3.12.*-aarch64-apple-darwin-install_only.tar.gz \
-      --out build/ [--site prepared-site-packages-dir] [--dmg-tool path/to/dmg] [--rcodesign path]
+      --out build/ --hfsplus path/to/hfsplus --dmg-tool path/to/dmg --rcodesign path [--site dir]
 """
 from __future__ import annotations
 
@@ -39,7 +39,9 @@ BUNDLE_ID = "app.fotohaus.Fotohaus"
 MIN_MACOS = "14.0"
 # The GPL-bundling wheels are pinned: THIRD_PARTY_NOTICES.md and the GPL source archive attached to
 # each release name the exact FFmpeg/x264/x265 versions inside these. Update all three together.
-REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av==19.0.1", "numpy", "pillow", "pillow-heif==1.8.1",
+# PySide6 6.10+ builds its bindings for macOS 15 (6.12: macOS 26) whatever the wheel tag says; 6.9 targets
+# macOS 12, so the app really runs on macOS 14 as advertised. Raise this together with MIN_MACOS.
+REQUIREMENTS = ["PySide6-Essentials==6.9.3", "PySide6-Addons==6.9.3", "av==19.0.1", "numpy", "pillow", "pillow-heif==1.8.1",
                 "opencv-python-headless==5.0.0.93", "piexif", "rawpy", "onnxruntime", "tokenizers", "pyobjc-core",
                 "pyobjc-framework-Cocoa", "pyobjc-framework-Quartz", "pyobjc-framework-Vision",
                 "pyobjc-framework-UniformTypeIdentifiers", "pyobjc-framework-LocalAuthentication"]
@@ -352,10 +354,79 @@ def build(args):
     shutil.rmtree(work)
     if args.rcodesign:
         run([args.rcodesign, "sign", str(app)])
+    problems = verify_bundle(app)
+    for p in problems:
+        print("BUNDLE PROBLEM:", p)
+    if problems and not args.allow_problems:
+        sys.exit(f"{len(problems)} bundle problems (see above); not making a DMG")
+    print("bundle check: every binary is arm64, signed, runs on macOS", MIN_MACOS, "and finds its libraries")
     return app
 
 
-def make_dmg(app: Path, out: Path, dmg_tool: str | None):
+def verify_bundle(app: Path) -> list[str]:
+    """Check every Mach-O file the way macOS will load it: arm64, signed, minimum macOS no newer than
+    MIN_MACOS, and every library it links to present in the bundle or the system. Returns problems."""
+    import lief
+    lief.logging.disable()
+    problems: list[str] = []
+    min_os = tuple(int(x) for x in MIN_MACOS.split("."))
+    contents = app / "Contents"
+    for f in sorted(p for p in contents.rglob("*") if p.is_file() and not p.is_symlink() and is_macho(p)):
+        rel = f.relative_to(app)
+        fat = lief.MachO.parse(str(f))
+        if fat is None or fat.size == 0:
+            problems.append(f"{rel}: unreadable Mach-O")
+            continue
+        if fat.size != 1 or fat.at(0).header.cpu_type != lief.MachO.Header.CPU_TYPE.ARM64:
+            problems.append(f"{rel}: not a thin arm64 binary")
+        b = fat.at(0)
+        if not b.has_code_signature:
+            problems.append(f"{rel}: not signed")
+        if b.has_build_version:
+            v = tuple(b.build_version.minos[:2])
+            if v > min_os:
+                problems.append(f"{rel}: needs macOS {v[0]}.{v[1]}")
+        rpaths = []
+        for c in b.commands:
+            if c.command == lief.MachO.LoadCommand.TYPE.RPATH:
+                rpaths.append(c.path)
+        def resolve(name: str) -> list[Path]:
+            if name.startswith("@loader_path/"):
+                return [f.parent / name[len("@loader_path/"):]]
+            if name.startswith("@executable_path/"):
+                return [contents / "MacOS" / name[len("@executable_path/"):]]
+            if name.startswith("@rpath/"):
+                out = []
+                for rp in rpaths:
+                    for c in resolve(rp.rstrip("/") + "/" + name[len("@rpath/"):]) if rp.startswith("@") else \
+                            [Path(rp) / name[len("@rpath/"):]]:
+                        out.append(c)
+                return out
+            return []
+        for lib in b.libraries:
+            if lib.command == lief.MachO.LoadCommand.TYPE.ID_DYLIB:
+                continue                       # the library's own install name
+            name = lib.name
+            if name.startswith(("/usr/lib/", "/System/")):
+                continue
+            if not name.startswith("@"):
+                problems.append(f"{rel}: links to {name} outside the bundle")
+                continue
+            cands = resolve(name)
+            if not any(c.exists() for c in cands):
+                weak = lib.command == lief.MachO.LoadCommand.TYPE.LOAD_WEAK_DYLIB
+                if not weak:
+                    problems.append(f"{rel}: missing {name}")
+    return problems
+
+
+def make_dmg(app: Path, out: Path, dmg_tool: str | None, hfsplus: str | None = None):
+    """Disk image with the app, an Applications link and the READ ME.
+
+    With `hfsplus` (Mozilla's libdmg-hfsplus) and `mkfs.hfsplus` the image is a native HFS+ volume, the
+    format macOS itself uses: files keep normal permissions (writable by the owner once copied), so
+    `xattr -cr` can clear the quarantine flag. Without them it falls back to an ISO 9660 image, whose
+    files are read-only (Finder copies keep that, and `xattr` then fails with "Permission denied")."""
     stage = out / "_dmg"
     if stage.exists():
         shutil.rmtree(stage)
@@ -363,15 +434,31 @@ def make_dmg(app: Path, out: Path, dmg_tool: str | None):
     shutil.copytree(app, stage / app.name, symlinks=True)
     os.symlink("/Applications", stage / "Applications")
     shutil.copy2(SRC / "packaging" / "READ ME FIRST.txt", stage / "READ ME FIRST.txt")
-    iso = out / "Fotohaus-uncompressed.dmg"
-    run(["xorrisofs", "-D", "-l", "-V", "Fotohaus", "-no-pad", "-r", "-dir-mode", "0755", "-o", iso, stage],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.chmod(stage / "READ ME FIRST.txt", 0o644)
     final = out / f"Fotohaus-{__version__}-arm64.dmg"
-    if dmg_tool:
-        run([dmg_tool, iso, final])
-        iso.unlink()
+    if final.exists():
+        final.unlink()
+    mkfs = shutil.which("mkfs.hfsplus")
+    if hfsplus and mkfs and dmg_tool:
+        img = out / "Fotohaus.hfs"
+        size = sum(p.stat().st_size for p in stage.rglob("*") if p.is_file() and not p.is_symlink())
+        files = sum(1 for _ in stage.rglob("*"))
+        mb = int(size * 1.15 / 2**20 + files * 8 / 1024 + 64)        # data + 8 KiB per entry + slack
+        with open(img, "wb") as fh:
+            fh.truncate(mb * 2**20)
+        run([mkfs, "-v", "Fotohaus", img], stdout=subprocess.DEVNULL)
+        run([hfsplus, img, "addall", stage, "-s", "clone_link"], stdout=subprocess.DEVNULL)
+        run([dmg_tool, "build", img, final], stdout=subprocess.DEVNULL)
+        img.unlink()
     else:
-        os.replace(iso, final)
+        iso = out / "Fotohaus-uncompressed.dmg"
+        run(["xorrisofs", "-D", "-l", "-V", "Fotohaus", "-no-pad", "-r", "-dir-mode", "0755", "-o", iso, stage],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if dmg_tool:
+            run([dmg_tool, iso, final])
+            iso.unlink()
+        else:
+            os.replace(iso, final)
     shutil.rmtree(stage)
     return final
 
@@ -384,11 +471,16 @@ if __name__ == "__main__":
     ap.add_argument("--icns", default=str(SRC / "packaging" / "Fotohaus.icns"))
     ap.add_argument("--lipo", default=shutil.which("llvm-lipo") or shutil.which("llvm-lipo-18"))
     ap.add_argument("--pyc-python", default=shutil.which("python3.12"))
-    ap.add_argument("--dmg-tool")
+    ap.add_argument("--dmg-tool", help="libdmg-hfsplus `dmg` (Mozilla's, with --hfsplus; otherwise any)")
+    ap.add_argument("--hfsplus", help="libdmg-hfsplus `hfsplus` tool: build a native HFS+ image (recommended)")
     ap.add_argument("--rcodesign")
     ap.add_argument("--no-dmg", action="store_true")
+    ap.add_argument("--allow-problems", action="store_true", help="make the DMG even if the bundle check fails")
+    ap.add_argument("--unsigned", action="store_true", help="allow building without rcodesign (won't run on a Mac)")
     a = ap.parse_args()
+    if not a.rcodesign and not a.unsigned:
+        ap.error("--rcodesign is required: an unsigned bundle shows as damaged on Apple Silicon (or pass --unsigned)")
     app = build(a)
     print("built", app)
     if not a.no_dmg:
-        print("dmg", make_dmg(app, Path(a.out).resolve(), a.dmg_tool))
+        print("dmg", make_dmg(app, Path(a.out).resolve(), a.dmg_tool, a.hfsplus))

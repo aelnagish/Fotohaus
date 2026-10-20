@@ -51,10 +51,19 @@ def set_data_dir(new_dir: str) -> None:
     import shutil
     dst = Path(new_dir) / "Fotohaus Library"
     dst.mkdir(parents=True, exist_ok=True)
-    for name in ("library.db", "library.db-wal", "library.db-shm", "settings.json"):
-        src = DATA_DIR / name
-        if src.exists():
-            shutil.copy2(src, dst / name)
+    import sqlite3
+    # copy the live database with SQLite's backup API (copying the file while it is open can
+    # produce a broken copy); settings are a plain file
+    if (DATA_DIR / "library.db").exists():
+        src_db = sqlite3.connect(str(DATA_DIR / "library.db"), timeout=30)
+        dst_db = sqlite3.connect(str(dst / "library.db"))
+        try:
+            src_db.backup(dst_db)
+        finally:
+            dst_db.close()
+            src_db.close()
+    if (DATA_DIR / "settings.json").exists():
+        shutil.copy2(DATA_DIR / "settings.json", dst / "settings.json")
     if (DATA_DIR / "models").exists() and not (dst / "models").exists():
         shutil.copytree(DATA_DIR / "models", dst / "models")
     _DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,7 +117,9 @@ class Settings:
         self._data = dict(DEFAULT_SETTINGS)
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                self._data.update(json.load(fh))
+                saved = json.load(fh)
+            if isinstance(saved, dict):
+                self._data.update(saved)
         except (OSError, ValueError):
             pass
 

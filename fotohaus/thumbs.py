@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
 from pathlib import Path
 
 from PIL import Image
@@ -40,9 +41,14 @@ def make_thumb(row, size: int = THUMB_PX) -> Path:
     if chain or row["rotate"]:
         im = render(im, chain, row["rotate"] or 0)
     im.thumbnail((size, size), Image.LANCZOS)
-    tmp = out.with_suffix(".tmp")
-    im.save(tmp, "JPEG", quality=86 if size <= THUMB_PX else 92)
-    os.replace(tmp, out)
+    # several threads can render the same thumbnail at once: each writes its own temp file
+    tmp = out.with_name(f"{out.stem}.{os.getpid()}-{threading.get_ident()}.tmp")
+    try:
+        im.save(tmp, "JPEG", quality=86 if size <= THUMB_PX else 92)
+        os.replace(tmp, out)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
     return out
 
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 import datetime as _dt
 import json
 
-from PySide6.QtCore import (QAbstractListModel, QMimeData, QModelIndex, QPoint, QRect, QRectF, QSize, Qt,
+from PySide6.QtCore import (QAbstractListModel, QItemSelection, QMimeData, QModelIndex, QPoint, QRect, QRectF,
+                            QSize, Qt,
                             QTimer, QUrl, Signal)
 from PySide6.QtGui import QColor, QPainter, QPalette, QPen, QDrag
 from PySide6.QtWidgets import QAbstractItemView, QListView, QStyle, QStyledItemDelegate
@@ -349,11 +350,15 @@ class PhotoGrid(QListView):
         if kind == "header":
             # Picasa: clicking a folder header selects every picture in the folder
             sm = self.selectionModel()
-            sm.clearSelection()
-            i = index.row() + 1
+            first = index.row() + 1
+            i = first
             while i < len(self.model_.entries) and self.model_.entries[i][0] == "photo":
-                sm.select(self.model_.index(i), sm.SelectionFlag.Select)
                 i += 1
+            sel = QItemSelection()
+            if i > first:
+                sel.select(self.model_.index(first), self.model_.index(i - 1))
+            # one selection change for the whole folder, not one per picture
+            sm.select(sel, sm.SelectionFlag.ClearAndSelect)
             self.header_clicked.emit(obj)
 
     def set_reorderable(self, on: bool):
@@ -430,15 +435,19 @@ class PhotoGrid(QListView):
 
     def select_ids(self, ids: list[int]):
         sm = self.selectionModel()
-        sm.clearSelection()
-        first = None
-        for pid in ids:
-            i = self.model_.row_of.get(pid)
-            if i is not None:
-                idx = self.model_.index(i)
-                sm.select(idx, sm.SelectionFlag.Select)
-                if first is None:
-                    first = idx
+        rows = sorted(i for i in (self.model_.row_of.get(pid) for pid in ids) if i is not None)
+        sel = QItemSelection()
+        start = prev = None
+        for i in rows + [None]:                      # contiguous runs become one range each
+            if start is not None and (i is None or i != prev + 1):
+                sel.select(self.model_.index(start), self.model_.index(prev))
+                start = None
+            if i is not None and start is None:
+                start = i
+            prev = i
+        sm.select(sel, sm.SelectionFlag.ClearAndSelect)
+        first_row = self.model_.row_of.get(ids[0]) if ids else None
+        first = self.model_.index(first_row) if first_row is not None else None
         if first is not None:
             sm.setCurrentIndex(first, sm.SelectionFlag.NoUpdate)
             self.scrollTo(first)

@@ -7,8 +7,8 @@ are in `Fotohaus.app/Contents/Resources/Licenses/`.
 | Component | License |
 |---|---|
 | CPython 3.12 (python-build-standalone) | PSF License |
-| Qt 6, PySide6, Shiboken6 (incl. Qt Multimedia, Qt Print Support) | LGPL-3.0 |
-| FFmpeg 9.0.1 libraries inside Qt Multimedia | LGPL-2.1 or later |
+| Qt 6.9, PySide6 6.9.3, Shiboken6 (incl. Qt Multimedia, Qt Print Support) | LGPL-3.0 |
+| FFmpeg 7.1.1 libraries inside Qt Multimedia (LGPL build) | LGPL-2.1 or later |
 | OpenCV 5 (opencv-python-headless 5.0.0.93) | Apache-2.0 |
 | — with FFmpeg 7.1.1 (built with `--enable-gpl --enable-version3`), incl. libpostproc | GPL-3.0 or later |
 | — with x264 (core 164, revision 31e19f92) and x265 4.1+1 (commit 1d117be) | GPL-2.0 or later |

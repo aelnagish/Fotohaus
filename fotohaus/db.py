@@ -67,6 +67,18 @@ MIGRATIONS = [
 ]
 
 
+def under(col: str, path: str, include_self: bool = True) -> tuple[str, list]:
+    """SQL matching `col` equal to `path` or anything inside it. Uses substr(), not LIKE, because LIKE
+    treats "_" and "%" in folder names as wildcards (and "/Photos/a_b" would match "/Photos/a-b")."""
+    import os
+    o = path.rstrip(os.sep)
+    pre = o + os.sep
+    inside = f"substr({col}, 1, ?) = ?"
+    if include_self:
+        return f"({col} = ? OR {inside})", [o, len(pre), pre]
+    return inside, [len(pre), pre]
+
+
 class Database:
     def __init__(self, path: Path):
         self.path = Path(path)

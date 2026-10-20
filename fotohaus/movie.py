@@ -129,62 +129,62 @@ def make_movie(rows, opts: MovieOptions, progress=None, should_stop=None) -> str
             container.mux(pkt)
 
     slide_n = max(1, int(opts.slide_seconds * opts.fps))
-    trans_n = 0 if opts.transition in ("none", "panzoom") else max(1, int(opts.transition_seconds * opts.fps))
-    if opts.transition == "panzoom":
-        trans_n = max(1, int(opts.transition_seconds * opts.fps))
+    trans_n = 0 if opts.transition == "none" else max(1, int(opts.transition_seconds * opts.fps))
     total = len(rows)
     frames_written = 0
     prev_last = None
-    if opts.title:
-        tf = _title_frame(size, opts.title, opts.background)
-        for _ in range(int(opts.title_seconds * opts.fps)):
-            emit(tf)
-            frames_written += 1
-        prev_last = tf
-    for k, r in enumerate(rows):
-        if should_stop and should_stop():
-            break
-        if progress:
-            progress(k, total)
-        if r["kind"] == "video":
-            clip_frames = list(_video_frames(r["path"], size, opts, max_seconds=opts.extra.get("clip_max", 30)))
-            if not clip_frames:
-                continue
-            frames = clip_frames
-        else:
-            try:
-                im = media.load_image(r["path"], max_dim=max(size) * 2)
-                im = render(im, parse_filters(r["filters"]), r["rotate"] or 0)
-            except Exception:
-                continue
-            cap = (r["caption"] or "") if opts.captions else ""
-            if opts.transition == "panzoom":
-                frames = [_caption(f, cap) for f in _panzoom_frames(im, size, slide_n, k, opts.full_frame,
-                                                                     opts.background)]
-            else:
-                still = _caption(_fit(im, size, opts.full_frame, opts.background), cap)
-                frames = [still] * slide_n
-        # transition from previous slide into this one
-        if prev_last is not None and trans_n and opts.transition != "none":
-            n = min(trans_n, len(frames))
-            for i in range(n):
-                t = (i + 1) / (n + 1)
-                emit(_blend(prev_last, frames[i], t, "wipe" if opts.transition == "wipe" else "dissolve"))
+    try:
+        if opts.title:
+            tf = _title_frame(size, opts.title, opts.background)
+            for _ in range(int(opts.title_seconds * opts.fps)):
+                emit(tf)
                 frames_written += 1
-            frames = frames[n:]
-        for f in frames:
-            emit(f)
-            frames_written += 1
-        prev_last = frames[-1] if frames else prev_last
-    for pkt in vs.encode():
-        container.mux(pkt)
-    duration = frames_written / opts.fps
-    if astream is not None:
-        try:
-            _mux_audio(container, astream, opts.audio_path, duration)
-        except Exception as e:  # keep the silent movie if audio fails
-            print("audio failed:", e)
-    container.close()
+            prev_last = tf
+        for k, r in enumerate(rows):
+            if should_stop and should_stop():
+                break
+            if progress:
+                progress(k, total)
+            # frames are produced lazily: a 30-second 1080p clip would otherwise need gigabytes of memory
+            if r["kind"] == "video":
+                frames = _video_frames(r["path"], size, opts, max_seconds=opts.extra.get("clip_max", 30))
+            else:
+                try:
+                    im = media.load_image(r["path"], max_dim=max(size) * 2)
+                    im = render(im, parse_filters(r["filters"]), r["rotate"] or 0)
+                except Exception:
+                    continue
+                cap = (r["caption"] or "") if opts.captions else ""
+                if opts.transition == "panzoom":
+                    frames = (_caption(f, cap) for f in _panzoom_frames(im, size, slide_n, k, opts.full_frame,
+                                                                        opts.background))
+                else:
+                    still = _caption(_fit(im, size, opts.full_frame, opts.background), cap)
+                    frames = (still for _ in range(slide_n))
+            last = None
+            i = 0
+            for f in frames:
+                # transition from the previous slide into this one over its first frames
+                if prev_last is not None and i < trans_n:
+                    t = (i + 1) / (trans_n + 1)
+                    emit(_blend(prev_last, f, t, "wipe" if opts.transition == "wipe" else "dissolve"))
+                else:
+                    emit(f)
+                frames_written += 1
+                last = f
+                i += 1
+            if last is not None:
+                prev_last = last
+        for pkt in vs.encode():
+            container.mux(pkt)
+        duration = frames_written / opts.fps
+        if astream is not None:
+            try:
+                _mux_audio(container, astream, opts.audio_path, duration)
+            except Exception as e:  # keep the silent movie if audio fails
+                print("audio failed:", e)
+    finally:
+        container.close()
     return opts.out_path
 
 

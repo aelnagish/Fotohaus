@@ -239,10 +239,17 @@ def write_jpeg_metadata(path: str, caption: str, keywords: list[str], regions=No
         out += raw
     out += data[sos:]
     st = os.stat(path)
-    tmp = path + ".fotohaus-tmp"
-    with open(tmp, "wb") as fh:
-        fh.write(out)
-    os.replace(tmp, path)
+    tmp = f"{path}.fotohaus-{os.getpid()}.tmp"
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(out)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp, st.st_mode & 0o7777)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
     if keep_mtime:
         os.utime(path, (st.st_atime, st.st_mtime))
     return True

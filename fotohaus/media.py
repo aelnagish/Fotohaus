@@ -369,18 +369,44 @@ def _iptc_xmp_into(md: dict, im: Image.Image, path: str) -> None:
 
 
 def _video_creation_time(path: str) -> float | None:
-    """Read the QuickTime/MP4 'mvhd' creation time without external tools."""
+    """Read the QuickTime/MP4 'mvhd' creation time without external tools. Walks the top-level
+    boxes, so it also works when the 'moov' box is at the end of the file (common for cameras)."""
     try:
+        size_total = os.path.getsize(path)
         with open(path, "rb") as fh:
-            data = fh.read(4 * 1024 * 1024)
-        i = data.find(b"mvhd")
+            pos = 0
+            moov = None
+            for _ in range(10000):
+                if pos + 8 > size_total:
+                    break
+                fh.seek(pos)
+                hdr = fh.read(16)
+                if len(hdr) < 8:
+                    break
+                size = int.from_bytes(hdr[:4], "big")
+                typ = hdr[4:8]
+                head = 8
+                if size == 1 and len(hdr) >= 16:
+                    size, head = int.from_bytes(hdr[8:16], "big"), 16
+                elif size == 0:
+                    size = size_total - pos
+                if size < head:
+                    break
+                if typ == b"moov":
+                    fh.seek(pos + head)
+                    moov = fh.read(min(size - head, 8 * 1024 * 1024))
+                    break
+                pos += size
+        if moov is None:
+            return None
+        i = moov.find(b"mvhd")
         if i < 0:
             return None
-        ver = data[i + 4]
+        ver = moov[i + 4]
         if ver == 1:
-            secs = int.from_bytes(data[i + 8:i + 16], "big")
+            secs = int.from_bytes(moov[i + 8:i + 16], "big")
         else:
-            secs = int.from_bytes(data[i + 8:i + 12], "big")
+            secs = int.from_bytes(moov[i + 8:i + 12], "big")
         if secs <= 0:
             return None
         ts = secs - 2082844800  # 1904 epoch -> unix
@@ -401,31 +427,64 @@ def format_bytes(n: int | None) -> str:
     return str(n)
 
 
+def insert_exif(path: str, exif_bytes: bytes) -> None:
+    """Replace a JPEG's EXIF block safely: the new file is written next to the original and swapped in
+    only when complete, so a crash or full disk never leaves a half-written photo behind. The file's
+    permissions are kept."""
+    import piexif
+    with open(path, "rb") as fh:
+        data = fh.read()
+    out = io.BytesIO()
+    piexif.insert(exif_bytes, data, out)
+    tmp = f"{path}.fotohaus-{os.getpid()}-{threading.get_ident()}.tmp"
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(out.getvalue())
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+        except OSError:
+            pass
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _to_dms(v: float):
+    """Degrees → EXIF (deg, min, sec/100) rationals, carrying 59.995″ up to the next minute."""
+    v = abs(v)
+    total = round(v * 360000)            # hundredths of a second
+    d, rem = divmod(total, 360000)
+    m, s = divmod(rem, 6000)
+    return ((int(d), 1), (int(m), 1), (int(s), 100))
+
+
 def write_gps_exif(path: str, lat: float, lon: float) -> bool:
-    """Write GPS coordinates into a JPEG's EXIF (in place). Returns success."""
+    """Write GPS coordinates into a JPEG's EXIF (in place, atomically). Returns success."""
     if not path.lower().endswith((".jpg", ".jpeg", ".jpe", ".jfif")):
         return False
     try:
         import piexif
-
-        def to_dms(v: float):
-            v = abs(v)
-            d = int(v)
-            m = int((v - d) * 60)
-            s = round(((v - d) * 60 - m) * 60 * 100)
-            return ((d, 1), (m, 1), (s, 100))
         try:
             exif = piexif.load(path)
         except Exception:
             exif = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+        if exif.get("thumbnail") is None:
+            exif.pop("thumbnail", None)
+            exif["1st"] = {}
         exif["GPS"] = {
             piexif.GPSIFD.GPSVersionID: (2, 3, 0, 0),
             piexif.GPSIFD.GPSLatitudeRef: b"N" if lat >= 0 else b"S",
-            piexif.GPSIFD.GPSLatitude: to_dms(lat),
+            piexif.GPSIFD.GPSLatitude: _to_dms(lat),
             piexif.GPSIFD.GPSLongitudeRef: b"E" if lon >= 0 else b"W",
-            piexif.GPSIFD.GPSLongitude: to_dms(lon),
+            piexif.GPSIFD.GPSLongitude: _to_dms(lon),
         }
-        piexif.insert(piexif.dump(exif), path)
+        insert_exif(path, piexif.dump(exif))
         return True
     except Exception:
         return False

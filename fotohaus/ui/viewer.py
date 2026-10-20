@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 
-from PySide6.QtCore import (QObject, QPointF, QRectF, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal)
+from PySide6.QtCore import (QEvent, QObject, QPointF, QRectF, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal)
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QKeySequence, QMovie, QPainter, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton, QWidget
 
@@ -338,7 +338,11 @@ class PhotoViewer(QWidget):
         key = (row["path"], row["mtime"], row["filters"], row["rotate"])
         if key in self.cache:
             if not prefetch:
-                self.img = self.cache[key]
+                img = self.cache[key]
+                if img.isNull():          # still being prefetched: show the thumbnail meanwhile
+                    p = thumbs.thumb_path(row, thumbs.THUMB_PX)
+                    img = QImage(str(p)) if p.exists() else img
+                self.img = img
                 self.update()
             return
         if not prefetch:
@@ -615,10 +619,22 @@ class PhotoViewer(QWidget):
             self.toggle_zoom()
 
     def wheelEvent(self, e):
+        if not e.pixelDelta().isNull() and not (e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier)):
+            # trackpad: two-finger scroll pans a zoomed photo (pinch zooms, see event())
+            if not self.zoom_fit:
+                self.offset += QPointF(e.pixelDelta())
+                self.update()
+            return
         dy = e.angleDelta().y()
         if not dy:
             return
         self.zoom_by(1.0015 ** dy, e.position())
+
+    def event(self, e):
+        if e.type() == QEvent.NativeGesture and e.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+            self.zoom_by(1.0 + e.value(), e.position())
+            return True
+        return super().event(e)
 
     def closeEvent(self, e):
         self._stop_media()

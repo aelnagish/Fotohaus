@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import math
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QUrl, QUrlQuery, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, QUrl, QUrlQuery, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
@@ -232,14 +232,34 @@ class MapWidget(QWidget):
         self._drag = None
 
     def wheelEvent(self, e):
-        steps = e.angleDelta().y() / 120.0
-        if abs(steps) < 0.5:
+        if not e.pixelDelta().isNull() and not (e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier)):
+            # trackpad: two-finger scroll pans the map (pinch zooms, see event())
+            d = e.pixelDelta()
+            cx, cy = lonlat_to_world(*self.center, self.z)
+            self.center = world_to_lonlat(cx - d.x(), cy - d.y(), self.z)
+            self.update()
             return
-        pos = e.position()
+        # mouse wheels send 120 per notch; smooth wheels send small steps that add up
+        self._wheel_acc = getattr(self, "_wheel_acc", 0.0) + e.angleDelta().y() / 120.0
+        if abs(self._wheel_acc) < 0.5:
+            return
+        steps, self._wheel_acc = self._wheel_acc, 0.0
+        self._zoom_at(e.position(), 1 if steps > 0 else -1)
+
+    def event(self, e):
+        if e.type() == QEvent.NativeGesture and e.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+            self._pinch = getattr(self, "_pinch", 0.0) + e.value()
+            if abs(self._pinch) >= 0.35:
+                self._zoom_at(e.position(), 1 if self._pinch > 0 else -1)
+                self._pinch = 0.0
+            return True
+        return super().event(e)
+
+    def _zoom_at(self, pos, d):
         cx, cy = lonlat_to_world(*self.center, self.z)
         mx, my = cx - self.width() / 2 + pos.x(), cy - self.height() / 2 + pos.y()
         mlon, mlat = world_to_lonlat(mx, my, self.z)
-        nz = max(1, min(18, self.z + (1 if steps > 0 else -1)))
+        nz = max(1, min(18, self.z + d))
         if nz == self.z:
             return
         self.z = nz
@@ -248,15 +268,7 @@ class MapWidget(QWidget):
         self.update()
 
     def mouseDoubleClickEvent(self, e):
-        self.wheelEvent_fake(e.position(), 1)
-
-    def wheelEvent_fake(self, pos, d):
-        cx, cy = lonlat_to_world(*self.center, self.z)
-        mlon, mlat = world_to_lonlat(cx - self.width() / 2 + pos.x(), cy - self.height() / 2 + pos.y(), self.z)
-        self.z = max(1, min(18, self.z + d))
-        nx, ny = lonlat_to_world(mlon, mlat, self.z)
-        self.center = world_to_lonlat(nx - pos.x() + self.width() / 2, ny - pos.y() + self.height() / 2, self.z)
-        self.update()
+        self._zoom_at(e.position(), 1)
 
 
 class PlacesView(QWidget):

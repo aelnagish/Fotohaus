@@ -7,6 +7,7 @@ import shutil
 import time
 
 from . import media
+from .db import under
 from .picasa.ini import PicasaIni
 
 ORIG = ".picasaoriginals"
@@ -81,7 +82,7 @@ def move_file(lib, pid: int, dest_dir: str, new_name: str | None = None, copy: b
                 os.rmdir(os.path.join(src_dir, ORIG))
             except OSError:
                 pass
-    if lib._can_write_ini(src_dir) or lib.settings.get("write_picasa_ini"):
+    if lib.settings.get("write_picasa_ini"):
         try:
             _move_ini_section(src_dir, src_name, dest_dir, dst_name, copy)
         except OSError:
@@ -93,7 +94,7 @@ def move_file(lib, pid: int, dest_dir: str, new_name: str | None = None, copy: b
                  " exposure, lat, lon, star, caption, keywords, filters, rotate, hidden, duration, phash, ocr,"
                  " labels_done, faces_done, clip_done, added) SELECT ?, ?, ?, kind, size, mtime, width, height, taken,"
                  " camera, lens, exposure, lat, lon, star, caption, keywords, filters, rotate, hidden, duration, phash,"
-                 " ocr, labels_done, 0, clip_done, ? FROM photos WHERE id=?", (fid, target, dst_name, time.time(), pid))
+                 " ocr, 0, 0, 0, ? FROM photos WHERE id=?", (fid, target, dst_name, time.time(), pid))
     else:
         lib.db.x("UPDATE photos SET folder_id=?, path=?, filename=? WHERE id=?", (fid, target, dst_name, pid))
     _refresh_folder_counts(lib)
@@ -128,6 +129,7 @@ def move_photos(lib, ids, dest_dir: str, copy: bool = False) -> list[str]:
 
 
 def rename_photo(lib, pid: int, new_name: str) -> str:
+    new_name = _check_name(new_name)
     r = lib.photo(pid)
     ext = os.path.splitext(r["filename"])[1]
     if not os.path.splitext(new_name)[1]:
@@ -144,7 +146,7 @@ def batch_rename(lib, ids, base: str, include_date: bool = False, include_resolu
     n = len(rows)
     out = []
     for i, r in enumerate(rows):
-        parts = [base.strip() or "Photo"]
+        parts = [base.strip().replace("/", "-").replace(":", "-") or "Photo"]
         if include_date and r["taken"]:
             parts.append(_dt.datetime.fromtimestamp(r["taken"]).strftime("%Y-%m-%d %H.%M.%S"))
         if include_resolution and r["width"]:
@@ -174,9 +176,10 @@ def adjust_dates(lib, ids, delta_seconds: float | None = None, absolute: float |
                 ex.setdefault("Exif", {})[piexif.ExifIFD.DateTimeOriginal] = stamp
                 ex["Exif"][piexif.ExifIFD.DateTimeDigitized] = stamp
                 ex.setdefault("0th", {})[piexif.ImageIFD.DateTime] = stamp
-                if "thumbnail" in ex and ex["thumbnail"] is None:
-                    ex.pop("thumbnail")
-                piexif.insert(piexif.dump(ex), r["path"])
+                if ex.get("thumbnail") is None:
+                    ex.pop("thumbnail", None)
+                    ex["1st"] = {}
+                media.insert_exif(r["path"], piexif.dump(ex))
                 st = os.stat(r["path"])
                 lib.db.x("UPDATE photos SET mtime=?, size=? WHERE id=?", (st.st_mtime, st.st_size, r["id"]))
             except Exception as e:
@@ -197,7 +200,7 @@ def adjust_dates(lib, ids, delta_seconds: float | None = None, absolute: float |
 # ------------------------------------------------------------------ folders
 
 def new_folder(lib, parent: str, name: str) -> str:
-    path = unique_path(os.path.join(parent, name.strip() or "New Folder"))
+    path = unique_path(os.path.join(parent, _check_name(name or "New Folder")))
     os.makedirs(path)
     _folder_id(lib, path)
     lib.emit("library")
@@ -220,14 +223,17 @@ def _write_folder_meta(lib, path, name, description, place, date):
     fid = _folder_id(lib, path)
     lib.db.x("UPDATE folders SET name=?, description=?, place=?, date=COALESCE(?, date) WHERE id=?",
              (name, description, place, date, fid))
-    if lib._can_write_ini(path) or lib.settings.get("write_picasa_ini"):
-        ini = PicasaIni(path)
-        ini.set("Picasa", "name", name)
-        ini.set("Picasa", "description", description or None)
-        ini.set("Picasa", "location", place or None)
-        if date:
-            ini.set("Picasa", "date", f"{date / 86400 + 25569:.6f}")  # OLE automation date, as Picasa wrote it
-        ini.save()
+    if lib._can_write_ini(path):
+        try:
+            ini = PicasaIni(path)
+            ini.set("Picasa", "name", name)
+            ini.set("Picasa", "description", description or None)
+            ini.set("Picasa", "location", place or None)
+            if date:
+                ini.set("Picasa", "date", f"{date / 86400 + 25569:.6f}")  # OLE automation date, as Picasa wrote it
+            ini.save()
+        except OSError:
+            pass
 
 
 def set_folder_properties(lib, fid: int, name: str, description: str, place: str, date: float | None):
@@ -251,19 +257,28 @@ def _repath_tree(lib, old: str, new: str) -> None:
     o, n = old.rstrip(os.sep), new.rstrip(os.sep)
     with lib.db.write_lock:
         c = lib.db.conn
-        for fid, p in c.execute("SELECT id, path FROM folders WHERE path=? OR path LIKE ?", (o, o + os.sep + "%")).fetchall():
+        w, a = under("path", o)
+        for fid, p in c.execute(f"SELECT id, path FROM folders WHERE {w}", a).fetchall():
             np_ = n + p[len(o):]
             c.execute("UPDATE folders SET path=?, name=CASE WHEN path=? THEN ? ELSE name END WHERE id=?",
                       (np_, o, os.path.basename(n), fid))
-        for pid, p in c.execute("SELECT id, path FROM photos WHERE path LIKE ?", (o + os.sep + "%",)).fetchall():
+        w, a = under("path", o, include_self=False)
+        for pid, p in c.execute(f"SELECT id, path FROM photos WHERE {w}", a).fetchall():
             c.execute("UPDATE photos SET path=? WHERE id=?", (n + p[len(o):], pid))
         c.commit()
+
+
+def _check_name(name: str) -> str:
+    name = (name or "").strip()
+    if not name or name in (".", "..") or "/" in name or "\0" in name:
+        raise ValueError(f"\"{name}\" can't be used as a name.")
+    return name
 
 
 def rename_folder(lib, fid: int, new_name: str) -> str:
     f = lib.folder(fid)
     old = f["path"]
-    new = os.path.join(os.path.dirname(old), new_name.strip())
+    new = os.path.join(os.path.dirname(old), _check_name(new_name))
     if os.path.exists(new):
         raise FileExistsError(new)
     os.rename(old, new)
@@ -291,9 +306,11 @@ def delete_folder(lib, fid: int) -> bool:
     if not f or not _trash(f["path"]):
         return False
     o = f["path"].rstrip(os.sep)
-    ids = [r[0] for r in lib.db.q("SELECT id FROM photos WHERE path LIKE ?", (o + os.sep + "%",))]
+    w, a = under("path", o, include_self=False)
+    ids = [r[0] for r in lib.db.q(f"SELECT id FROM photos WHERE {w}", a)]
     lib._delete_photo_rows(ids)
-    lib.db.x("DELETE FROM folders WHERE path=? OR path LIKE ?", (o, o + os.sep + "%"))
+    w, a = under("path", o)
+    lib.db.x(f"DELETE FROM folders WHERE {w}", a)
     lib.emit("library")
     return True
 

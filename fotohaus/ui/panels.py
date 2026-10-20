@@ -204,6 +204,8 @@ class SelectionPeoplePanel(QWidget):
         n = 0
         for pid in self.ids:
             r = self.lib.photo(pid)
+            if r is None:            # removed meanwhile
+                continue
             for f in self.lib.faces_for_photo(pid):
                 d = dict(f)
                 d["path"] = r["path"]

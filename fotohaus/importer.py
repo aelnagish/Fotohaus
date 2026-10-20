@@ -85,7 +85,8 @@ def do_import(lib, items: list[ImportItem], base_dir: str, title: str, by_date: 
         shutil.copy2(it.path, target)
         stats["copied"] += 1
         stats["folders"].add(str(folder))
-        if delete_after:
+        # only delete from the card once the copy is verifiably complete
+        if delete_after and os.path.getsize(target) == os.path.getsize(it.path):
             try:
                 os.remove(it.path)
                 stats["deleted"] += 1

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import media
-from .db import Database
+from .db import Database, under
 from .edits import render
 from .paths import DB_PATH, ensure_dirs, settings
 from .picasa.contacts import find_picasa_contacts_files, load_contacts_xml
@@ -84,8 +84,8 @@ class Library:
             return
         if mode == "exclude":
             self.add_root(path, kind="exclude")
-            o = path.rstrip(os.sep)
-            for f in self.db.q("SELECT id FROM folders WHERE path=? OR path LIKE ?", (o, o + os.sep + "%")):
+            w, a = under("path", path)
+            for f in self.db.q(f"SELECT id FROM folders WHERE {w}", a):
                 self._delete_folder(f["id"])
             self.emit("library")
             return
@@ -169,10 +169,11 @@ class Library:
             return any(p == e or p.startswith(e + os.sep) for e in excluded)
         for root in roots:
             seen: set[str] = set()
+            unreadable: list[str] = []
             rpath = root["path"]
             if not os.path.isdir(rpath):
-                continue
-            for dirpath, dirnames, filenames in os.walk(rpath):
+                continue                     # drive not connected: keep everything as it is
+            for dirpath, dirnames, filenames in os.walk(rpath, onerror=lambda e: unreadable.append(e.filename)):
                 if should_stop and should_stop():
                     return stats
                 dirnames[:] = sorted(d for d in dirnames
@@ -189,10 +190,19 @@ class Library:
                         progress(dirpath, stats["new"])
                     self._scan_folder(dirpath, files, root, stats)
                     stats["folders"] += 1
+            if should_stop and should_stop():
+                return stats
+            bad = [u.rstrip(os.sep) for u in unreadable if u]
             for f in self.db.q("SELECT id, path FROM folders WHERE root_id=?", (root["id"],)):
-                if f["path"] not in seen:
-                    self._delete_folder(f["id"])
-                    stats["removed"] += 1
+                if f["path"] in seen:
+                    continue
+                # a folder we couldn't list (no permission, network hiccup) is kept, not forgotten:
+                # forgetting it would lose stars, albums and faces stored only in the library
+                if any(f["path"] == b or f["path"].startswith(b + os.sep) for b in bad) \
+                        or (os.path.isdir(f["path"]) and not os.access(f["path"], os.R_OK | os.X_OK)):
+                    continue
+                self._delete_folder(f["id"])
+                stats["removed"] += 1
             self.db.x("UPDATE roots SET last_scan=? WHERE id=?", (time.time(), root["id"]))
         try:
             self.rebuild_stacks()
@@ -583,7 +593,8 @@ class Library:
             folder_ids = [r["id"] for r in self.db.q("SELECT id FROM folders")]
         n_stacks = 0
         for fid in folder_ids:
-            rows = self.db.q("SELECT id, filename, kind, taken, camera, duration, star, path FROM photos "
+            rows = self.db.q("SELECT id, filename, kind, taken, camera, duration, star, path, stack_key, "
+                             "stack_member, stack_count, stack_kind, live_video FROM photos "
                              "WHERE folder_id=? AND deleted IS NULL", (fid,))
             updates = {r["id"]: (None, 0, 0, "", "") for r in rows}   # key, member, count, kind, live
             by_stem: dict[str, list] = {}
@@ -634,11 +645,15 @@ class Library:
                     flush(run)
                     run = [r]
             flush(run)
-            with self.db.write_lock:
-                c = self.db.conn
-                c.executemany("UPDATE photos SET stack_key=?, stack_member=?, stack_count=?, stack_kind=?, "
-                              "live_video=? WHERE id=?", [v + (pid,) for pid, v in updates.items()])
-                c.commit()
+            current = {r["id"]: (r["stack_key"], r["stack_member"] or 0, r["stack_count"] or 0,
+                                 r["stack_kind"] or "", r["live_video"] or "") for r in rows}
+            changed = [v + (pid,) for pid, v in updates.items() if current.get(pid) != v]
+            if changed:       # rescans run every few minutes: don't rewrite every photo each time
+                with self.db.write_lock:
+                    c = self.db.conn
+                    c.executemany("UPDATE photos SET stack_key=?, stack_member=?, stack_count=?, stack_kind=?, "
+                                  "live_video=? WHERE id=?", changed)
+                    c.commit()
         return n_stacks
 
     # ------------------------------------------------------------------ place names (offline)
@@ -856,7 +871,8 @@ class Library:
     def rename_album(self, aid: int, name: str) -> None:
         self.db.x("UPDATE albums SET name=? WHERE id=?", (name, aid))
         a = self.album(aid)
-        folders = {os.path.dirname(r["path"]) for r in self.photos_in_album(aid)}
+        folders = {os.path.dirname(r["path"]) for r in self.db.q(
+            "SELECT p.path FROM photos p JOIN album_photos ap ON ap.photo_id=p.id WHERE ap.album_id=?", (aid,))}
         for folder in folders:
             self._edit_ini(folder, lambda ini: ini.set(f".album:{a['token']}", "name", name))
         self.emit("albums")
@@ -894,7 +910,7 @@ class Library:
 
     def delete_album(self, aid: int) -> None:
         a = self.album(aid)
-        pids = [r["id"] for r in self.photos_in_album(aid)]
+        pids = [r[0] for r in self.db.q("SELECT photo_id FROM album_photos WHERE album_id=?", (aid,))]
         self.db.x("DELETE FROM album_photos WHERE album_id=?", (aid,))
         self.db.x("DELETE FROM albums WHERE id=?", (aid,))
         if a:
@@ -911,9 +927,11 @@ class Library:
     def people(self, include_unnamed=False):
         where = "" if include_unnamed else "WHERE p.name != ''"
         return self.db.q(
-            f"SELECT p.*, (SELECT COUNT(DISTINCT f.photo_id) FROM faces f WHERE f.person_id=p.id AND f.confirmed=1"
-            f" AND f.ignored=0) AS n, (SELECT COUNT(*) FROM faces f WHERE f.person_id=p.id AND f.confirmed=0"
-            f" AND f.ignored=0) AS suggestions FROM people p {where} ORDER BY p.name COLLATE NOCASE")
+            f"SELECT p.*, (SELECT COUNT(DISTINCT f.photo_id) FROM faces f JOIN photos ph ON ph.id=f.photo_id "
+            f"WHERE f.person_id=p.id AND f.confirmed=1 AND f.ignored=0 AND COALESCE(ph.private,0)=0 "
+            f"AND ph.deleted IS NULL) AS n, (SELECT COUNT(*) FROM faces f JOIN photos ph ON ph.id=f.photo_id "
+            f"WHERE f.person_id=p.id AND f.confirmed=0 AND f.ignored=0 AND COALESCE(ph.private,0)=0 "
+            f"AND ph.deleted IS NULL) AS suggestions FROM people p {where} ORDER BY p.name COLLATE NOCASE")
 
     def person(self, person_id: int):
         return self.db.one("SELECT * FROM people WHERE id=?", (person_id,))
@@ -931,24 +949,30 @@ class Library:
         return self.db.q("SELECT f.*, pe.name AS person_name FROM faces f LEFT JOIN people pe ON pe.id=f.person_id "
                          "WHERE f.photo_id=? AND f.ignored=0", (pid,))
 
+    # face lists never show Private or Recently Deleted photos (a face crop would reveal them)
+    _FACE_VIS = "COALESCE(p.private,0)=0 AND p.deleted IS NULL"
+
     def faces_for_person(self, person_id: int, confirmed: int | None = None, limit: int = 500):
         c = "" if confirmed is None else f"AND f.confirmed={int(confirmed)}"
         return self.db.q(f"SELECT f.*, p.path, p.rotate, p.filters FROM faces f JOIN photos p ON p.id=f.photo_id "
-                         f"WHERE f.person_id=? AND f.ignored=0 {c} ORDER BY f.suggestion DESC, p.taken DESC LIMIT ?",
-                         (person_id, limit))
+                         f"WHERE f.person_id=? AND f.ignored=0 {c} AND {self._FACE_VIS} "
+                         f"ORDER BY f.suggestion DESC, p.taken DESC LIMIT ?", (person_id, limit))
 
     def unnamed_clusters(self, min_size: int = 2, limit: int = 60):
         return self.db.q(
-            "SELECT cluster, COUNT(*) AS n FROM faces WHERE person_id IS NULL AND ignored=0 AND cluster IS NOT NULL "
-            "GROUP BY cluster HAVING n >= ? ORDER BY n DESC LIMIT ?", (min_size, limit))
+            f"SELECT f.cluster AS cluster, COUNT(*) AS n FROM faces f JOIN photos p ON p.id=f.photo_id "
+            f"WHERE f.person_id IS NULL AND f.ignored=0 AND f.cluster IS NOT NULL AND {self._FACE_VIS} "
+            f"GROUP BY f.cluster HAVING n >= ? ORDER BY n DESC LIMIT ?", (min_size, limit))
 
     def faces_in_cluster(self, cluster: int, limit: int = 200):
-        return self.db.q("SELECT f.*, p.path, p.rotate, p.filters FROM faces f JOIN photos p ON p.id=f.photo_id "
-                         "WHERE f.cluster=? AND f.person_id IS NULL AND f.ignored=0 LIMIT ?", (cluster, limit))
+        return self.db.q(f"SELECT f.*, p.path, p.rotate, p.filters FROM faces f JOIN photos p ON p.id=f.photo_id "
+                         f"WHERE f.cluster=? AND f.person_id IS NULL AND f.ignored=0 AND {self._FACE_VIS} LIMIT ?",
+                         (cluster, limit))
 
     def unnamed_faces(self, limit: int = 300):
-        return self.db.q("SELECT f.*, p.path, p.rotate, p.filters FROM faces f JOIN photos p ON p.id=f.photo_id "
-                         "WHERE f.person_id IS NULL AND f.ignored=0 ORDER BY f.score DESC LIMIT ?", (limit,))
+        return self.db.q(f"SELECT f.*, p.path, p.rotate, p.filters FROM faces f JOIN photos p ON p.id=f.photo_id "
+                         f"WHERE f.person_id IS NULL AND f.ignored=0 AND {self._FACE_VIS} ORDER BY f.score DESC LIMIT ?",
+                         (limit,))
 
     def ensure_person(self, name: str) -> int:
         name = name.strip()
@@ -975,7 +999,7 @@ class Library:
         return pid
 
     def reject_suggestions(self, face_ids: Iterable[int]) -> None:
-        self.db.xmany("UPDATE faces SET person_id=NULL, confirmed=0, suggestion=NULL WHERE id=?",
+        self.db.xmany("UPDATE faces SET person_id=NULL, confirmed=0, suggestion=-1 WHERE id=?",
                       [(f,) for f in face_ids])
         self.emit("people")
 
@@ -1001,7 +1025,8 @@ class Library:
             return
         self.db.x("UPDATE people SET name=? WHERE id=?", (name, person_id))
         p = self.person(person_id)
-        folders = {os.path.dirname(r["path"]) for r in self.photos_for_person(person_id)}
+        folders = {os.path.dirname(r["path"]) for r in self.db.q(
+            "SELECT DISTINCT p.path FROM photos p JOIN faces f ON f.photo_id=p.id WHERE f.person_id=?", (person_id,))}
         for folder in folders:
             self._edit_ini(folder, lambda ini: ini.set_contact(p["contact_id"], name))
         self.emit("people")
@@ -1143,7 +1168,8 @@ def _trash(path: str) -> bool:
         pass
     if sys.platform == "darwin":
         import subprocess
-        script = f'tell application "Finder" to delete POSIX file "{path}"'
+        from .macos import applescript_str
+        script = 'tell application "Finder" to delete POSIX file ' + applescript_str(path)
         return subprocess.call(["osascript", "-e", script], stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL) == 0
     return False
@@ -1152,35 +1178,44 @@ def _trash(path: str) -> bool:
 def _save_like_original(im, dest: str, original: str) -> None:
     from PIL import Image
     ext = os.path.splitext(dest)[1].lower()
-    tmp = dest + ".fotohaus-tmp"
+    tmp = f"{dest}.fotohaus-{os.getpid()}.tmp"
     exif_bytes = None
     try:
-        src = Image.open(original)
-        exif = src.getexif()
-        if exif:
-            exif[0x0112] = 1  # pixels are now upright
-            exif_bytes = exif.tobytes()
-        icc = src.info.get("icc_profile")
+        with Image.open(original) as src:
+            exif = src.getexif()
+            if exif:
+                exif[0x0112] = 1  # pixels are now upright
+                exif_bytes = exif.tobytes()
     except Exception:
-        icc = None
+        pass
+    # The original's colour profile (e.g. Display P3 on iPhone photos) is deliberately not copied:
+    # load_image converts pixels to sRGB, so keeping the old profile would make colours look wrong.
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
     kw = {}
     if exif_bytes:
         kw["exif"] = exif_bytes
-    if icc:
-        kw["icc_profile"] = icc
-    if ext in (".jpg", ".jpeg", ".jpe", ".jfif"):
-        im.save(tmp, "JPEG", quality=95, subsampling=0, optimize=True, **kw)
-    elif ext == ".png":
-        im.save(tmp, "PNG", **{k: v for k, v in kw.items() if k != "exif"})
-    elif ext in (".tif", ".tiff"):
-        im.save(tmp, "TIFF", compression="tiff_lzw")
-    elif ext == ".webp":
-        im.save(tmp, "WEBP", quality=95, **kw)
-    elif ext in (".heic", ".heif"):
-        im.save(tmp, "HEIF", quality=92, **kw)
-    else:
-        im.save(tmp)
-    os.replace(tmp, dest)
+    try:
+        if ext in (".jpg", ".jpeg", ".jpe", ".jfif"):
+            im.save(tmp, "JPEG", quality=95, subsampling=0, optimize=True, **kw)
+        elif ext == ".png":
+            im.save(tmp, "PNG", **{k: v for k, v in kw.items() if k != "exif"})
+        elif ext in (".tif", ".tiff"):
+            im.save(tmp, "TIFF", compression="tiff_lzw")
+        elif ext == ".webp":
+            im.save(tmp, "WEBP", quality=95, **kw)
+        elif ext in (".heic", ".heif"):
+            im.save(tmp, "HEIF", quality=92, **kw)
+        else:
+            raise ValueError(f"can't save {ext} files")
+        try:
+            os.chmod(tmp, os.stat(dest).st_mode & 0o7777)
+        except OSError:
+            pass
+        os.replace(tmp, dest)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 _lib: Library | None = None

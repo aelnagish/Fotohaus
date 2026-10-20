@@ -1,7 +1,7 @@
 """Image canvas used by the editor: fit/zoom/pan, crop box, point/rect picking, face overlay."""
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -316,18 +316,33 @@ class ImageCanvas(QWidget):
         self._drag = None
         self.update()
 
+    def _zoom_by(self, factor: float):
+        r = self.image_rect()
+        cur = r.width() / max(1, self.img.width())
+        self.zoom = max(0.05, min(8.0, cur * factor))
+        self.zoom_fit = False
+        self.update()
+
     def wheelEvent(self, e):
         if self.img is None:
             return
-        if e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier) or not self.zoom_fit:
-            r = self.image_rect()
-            cur = r.width() / self.img.width()
-            factor = 1.0015 ** e.angleDelta().y()
-            self.zoom = max(0.05, min(8.0, cur * factor))
-            self.zoom_fit = False
+        zoom_key = bool(e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier))
+        if not zoom_key and not self.zoom_fit and not e.pixelDelta().isNull():
+            # two-finger scroll on a trackpad pans a zoomed photo (a mouse wheel still zooms)
+            self.offset += QPointF(e.pixelDelta())
             self.update()
+        elif zoom_key or not self.zoom_fit:
+            self._zoom_by(1.0015 ** e.angleDelta().y())
         else:
             super().wheelEvent(e)
+
+    def event(self, e):
+        # pinch to zoom on a trackpad
+        if e.type() == QEvent.NativeGesture and self.img is not None \
+                and e.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+            self._zoom_by(1.0 + e.value())
+            return True
+        return super().event(e)
 
     def mouseDoubleClickEvent(self, e):
         if self.mode != "view":

@@ -19,6 +19,11 @@ VIEWER_TYPES = [
 ]
 
 
+def applescript_str(s: str) -> str:
+    """A quoted AppleScript string literal (paths may contain quotes or backslashes)."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def _ns():
     import AppKit  # noqa: F401
     import Foundation
@@ -130,7 +135,8 @@ def set_desktop_picture(path: str) -> bool:
                 ok = ok and bool(res[0] if isinstance(res, tuple) else res)
             return ok
         except Exception:
-            script = f'tell application "System Events" to tell every desktop to set picture to POSIX file "{path}"'
+            script = ('tell application "System Events" to tell every desktop to set picture to POSIX file '
+                      + applescript_str(path))
             return subprocess.call(["osascript", "-e", script]) == 0
     return False
 

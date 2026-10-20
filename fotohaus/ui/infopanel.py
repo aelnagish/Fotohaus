@@ -358,6 +358,7 @@ class InfoPanel(QScrollArea):
         self.details.show()
 
     def show_photo(self, pid):
+        same = pid is not None and pid == self.pid and not self._multi
         self._multi = []
         self.pid = pid
         self._reset_cards()
@@ -378,8 +379,11 @@ class InfoPanel(QScrollArea):
         self._update_preview()
 
         self.desc.show()
-        self.caption.setText(r["caption"] or "")
-        self.tags.setText(", ".join(k for k in (r["keywords"] or "").split(",") if k))
+        # a refresh while the user is typing must not replace what they typed
+        if not (same and self.caption.hasFocus()):
+            self.caption.setText(r["caption"] or "")
+        if not (same and self.tags.hasFocus()):
+            self.tags.setText(", ".join(k for k in (r["keywords"] or "").split(",") if k))
         for e in (self.caption, self.tags):     # show the start of long text, not the end
             if not e.hasFocus():
                 e.setCursorPosition(0)

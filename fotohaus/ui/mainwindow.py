@@ -295,7 +295,7 @@ class MainWindow(QMainWindow):
         e.addAction("Select All", self.grid.selectAll, S.SelectAll)
         e.addAction("Select Starred", self.select_starred)
         e.addAction("Invert Selection", self.invert_selection)
-        e.addAction("Clear Selection", self.grid.clearSelection, S("Ctrl+Shift+A"))
+        e.addAction("Clear Selection", self.grid.clearSelection, S("Ctrl+Alt+A"))
         e.addSeparator()
         e.addAction("Find", lambda: (self.search_box.setFocus(), self.search_box.selectAll()), S.Find)
         e.addAction("Save Search Results as Album…", self.save_search)
@@ -666,12 +666,15 @@ class MainWindow(QMainWindow):
         elif kind == "private":
             if not lib.counts()["private"]:
                 rows, title = [], "Private"
-            elif self._unlock_private():
+            # background refreshes (rescans, app activation) never ask for Touch ID: only opening the
+            # collection does, otherwise a cancelled prompt would come back every few seconds
+            elif getattr(self, "_private_unlocked", False) or (not keep_selection and self._unlock_private()):
                 rows, title = lib.private_photos(), "Private"
                 sub = "Only visible here, after unlocking. Lock again by quitting Fotohaus."
             else:
                 rows, title = [], "Private"
                 sub = "Locked."
+                self._header_btn("Unlock…", lambda: self._unlock_private() and self.reload_collection())
         elif kind == "deleted":
             rows, title, sections = lib.deleted_photos(), "Recently Deleted", None
             sub = "Items are kept for 30 days, then moved to the Mac's Trash. Your files stay in place until then."
@@ -690,7 +693,8 @@ class MainWindow(QMainWindow):
             sections = None
             self._header_btn("Save as Album…", self.save_search)
         elif kind == "ids":
-            rows = lib.photos_by_ids(list(ident))
+            # results from Places / Find Similar never reveal Private or Recently Deleted photos
+            rows = [r for r in lib.photos_by_ids(list(ident)) if not r["private"] and r["deleted"] is None]
             title = f"{len(rows)} pictures"
             sections = None
         else:
@@ -949,10 +953,6 @@ class MainWindow(QMainWindow):
                 macos.open_with(paths, app)
         m.addAction("Other…", choose)
 
-    def open_external(self):
-        rows = self.lib.photos_by_ids(self._sel()[:10])
-        macos.open_with([r["path"] for r in rows], None)
-
     def trash_selected(self):
         """Delete = move to Recently Deleted (kept 30 days, restorable). In Recently Deleted it purges."""
         ids = self._sel()
@@ -964,9 +964,9 @@ class MainWindow(QMainWindow):
             self.close_editor()
         self.held = [i for i in self.held if i not in ids]
         self.lib.soft_delete(ids)
-        self.statusBar().showMessage(f"Moved {len(ids)} item{'s' if len(ids) != 1 else ''} to Recently Deleted. "
-                                     "They're kept for 30 days.", 6000) if hasattr(self, "statusBar") else None
         self._refresh_all()
+        self.tray.status.setText(f"Moved {len(ids)} item{'s' if len(ids) != 1 else ''} to Recently Deleted. "
+                                 "They're kept for 30 days.")
 
     def restore_selected(self):
         ids = self._sel()
@@ -1027,7 +1027,7 @@ class MainWindow(QMainWindow):
                 fileops.rename_photo(self.lib, rows[0]["id"], d.base.text().strip() or rows[0]["filename"])
             else:
                 fileops.batch_rename(self.lib, ids, d.base.text(), d.date.isChecked(), d.res.isChecked())
-        except OSError as e:
+        except (OSError, ValueError) as e:
             QMessageBox.warning(self, "Rename", str(e))
 
     def adjust_dates(self):
@@ -1285,7 +1285,7 @@ class MainWindow(QMainWindow):
         if ok and name.strip():
             try:
                 fileops.rename_folder(self.lib, fid, name.strip())
-            except OSError as e:
+            except (OSError, ValueError) as e:
                 QMessageBox.warning(self, "Rename Folder", str(e))
 
     def _move_folder(self, fid):
@@ -1320,7 +1320,10 @@ class MainWindow(QMainWindow):
         parent = base if inside else os.path.dirname(base) if fid else base
         name, ok = QInputDialog.getText(self, "New Folder", f"New folder in {parent}:")
         if ok and name.strip():
-            fileops.new_folder(self.lib, parent, name.strip())
+            try:
+                fileops.new_folder(self.lib, parent, name.strip())
+            except (OSError, ValueError) as e:
+                QMessageBox.warning(self, "New Folder", str(e))
 
     def move_to_folder(self):
         ids = self._sel()
@@ -1339,7 +1342,11 @@ class MainWindow(QMainWindow):
         if d.exec():
             name, date, place, desc = d.values()
             if name:
-                path = fileops.move_to_new_folder(self.lib, ids, name, description=desc, place=place, date=date)
+                try:
+                    path = fileops.move_to_new_folder(self.lib, ids, name, description=desc, place=place, date=date)
+                except (OSError, ValueError) as e:
+                    QMessageBox.warning(self, "Move to New Folder", str(e))
+                    return
                 fid = self.lib.db.scalar("SELECT id FROM folders WHERE path=?", (path,))
                 if fid:
                     self._go("folder", fid)
@@ -1354,7 +1361,10 @@ class MainWindow(QMainWindow):
                                         "Pictures from the selected one onwards move to a new folder named:",
                                         text=f"{self.lib.folder(r['folder_id'])['name']} (2)")
         if ok and name.strip():
-            fileops.split_folder_here(self.lib, r["folder_id"], r["id"], name.strip())
+            try:
+                fileops.split_folder_here(self.lib, r["folder_id"], r["id"], name.strip())
+            except (OSError, ValueError) as e:
+                QMessageBox.warning(self, "Split Folder", str(e))
 
     def _drop_on_folder(self, fid, ids, copy):
         f = self.lib.folder(fid)
@@ -1501,7 +1511,8 @@ class MainWindow(QMainWindow):
                 return
             from ..ai.dupes import _popcount
             import numpy as np
-            rows = self.lib.db.q("SELECT id, phash FROM photos WHERE phash IS NOT NULL AND phash != ''")
+            rows = self.lib.db.q("SELECT id, phash FROM photos WHERE phash IS NOT NULL AND phash != '' "
+                                 "AND COALESCE(private,0)=0 AND deleted IS NULL")
             hv = np.array([int(x["phash"], 16) for x in rows], dtype=np.uint64)
             d = _popcount(hv ^ np.uint64(int(r["phash"], 16)))
             order = np.argsort(d)[:60]
