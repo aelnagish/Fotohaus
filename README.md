@@ -13,7 +13,7 @@ touching your originals, and never uploads a single pixel.
 
 **[Website](https://aelnagish.github.io/Fotohaus/)** · **[Download](https://github.com/aelnagish/Fotohaus/releases/latest)** · **[Install guide](INSTALL.md)**
 
-<img src="docs/demo.gif" alt="Fotohaus library: scrolling through photos grouped by folder and selecting them, with details in the info panel" width="100%">
+<img src="docs/demo.gif" alt="Fotohaus demo: flipping through a folder with the arrow keys in the photo viewer, then browsing the library grouped by folder with details in the info panel" width="100%">
 
 </div>
 
