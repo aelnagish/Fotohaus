@@ -132,7 +132,14 @@ code{font:500 .9em ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--sun)}
 .formats{margin-top:40px;max-width:70ch;color:var(--haze);font-size:.98rem}
 
 /* install: a real sequence, so it is numbered */
-.steps{counter-reset:s;margin:40px 0 0;padding:0;list-style:none;display:grid;gap:22px;max-width:760px}
+.brew{font-size:.9rem;color:var(--haze);margin-top:6px}
+.brew code{font-size:.85rem}
+.brewbox{margin-top:36px;max-width:760px;background:var(--deep);border-radius:12px;padding:22px 24px}
+.brewbox p{margin-top:6px}
+.brewbox pre{margin:14px 0 0;padding:14px 16px;background:var(--harbour);border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.brewbox pre code{font-size:.95rem}
+.or{margin-top:40px}
+.steps{counter-reset:s;margin:24px 0 0;padding:0;list-style:none;display:grid;gap:22px;max-width:760px}
 .steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:16px}
 .steps li::before{content:counter(s);font:800 1.3rem/44px var(--display);color:#2a1a0e;background:var(--apricot);
   width:44px;height:44px;border-radius:50%;text-align:center}
@@ -187,6 +194,7 @@ footer a{color:var(--mist)}
         <a class="btn btn-ghost" href="https://github.com/aelnagish/fotohaus">Source on GitHub</a>
       </div>
       <p class="req">Version 1.0.0 · free · Apple silicon, macOS 14 or newer</p>
+      <p class="brew">Or with Homebrew: <code>brew install --cask aelnagish/tap/fotohaus</code></p>
     </div>
     <div class="stack">
       <div class="back" aria-hidden="true"></div>
@@ -375,6 +383,12 @@ faces=<b>rect64(3f845bcb59418507),8e62398ebda8c1a5</b></div>
   <div class="wrap">
     <h2>Install</h2>
     <p class="sub">Fotohaus runs on Apple silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.</p>
+    <div class="brewbox">
+      <h3>The quick way: Homebrew</h3>
+      <p>One command installs Fotohaus, opens it without the first-launch warning and adds <code>fotohaus-cli</code> to your Terminal.</p>
+      <pre><code>brew install --cask aelnagish/tap/fotohaus</code></pre>
+    </div>
+    <h3 class="or">Or install it by hand</h3>
     <ol class="steps">
       <li><div>
         <h3>Download the disk image</h3>
