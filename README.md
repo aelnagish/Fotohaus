@@ -185,7 +185,7 @@ image, see `packaging/build_mac_app.py`.
 
 ## Support
 
-Fotohaus is a free side project, built to make everyday things a little easier. If it saved you an
+Fotohaus is free, built to make everyday things a little easier. If it saved you an
 afternoon of sorting photos, you can [buy me a coffee ☕](https://buymeacoffee.com/aelnagish).
 
 Bug reports and ideas are welcome in [Issues](../../issues). Pull requests are covered by
