@@ -1,0 +1,3 @@
+# Only for running the tests (sample images for the face test). Not used by the app, never bundled.
+-r requirements.txt
+scikit-image

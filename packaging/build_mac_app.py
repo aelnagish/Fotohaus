@@ -37,8 +37,10 @@ from fotohaus import __version__  # noqa: E402
 PYVER = "3.12"
 BUNDLE_ID = "app.fotohaus.Fotohaus"
 MIN_MACOS = "14.0"
-REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av", "numpy", "pillow", "pillow-heif",
-                "opencv-python-headless", "piexif", "rawpy", "onnxruntime", "tokenizers", "pyobjc-core",
+# The GPL-bundling wheels are pinned: THIRD_PARTY_NOTICES.md and the GPL source archive attached to
+# each release name the exact FFmpeg/x264/x265 versions inside these. Update all three together.
+REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av==19.0.1", "numpy", "pillow", "pillow-heif==1.8.1",
+                "opencv-python-headless==5.0.0.93", "piexif", "rawpy", "onnxruntime", "tokenizers", "pyobjc-core",
                 "pyobjc-framework-Cocoa", "pyobjc-framework-Quartz", "pyobjc-framework-Vision",
                 "pyobjc-framework-UniformTypeIdentifiers", "pyobjc-framework-LocalAuthentication"]
 

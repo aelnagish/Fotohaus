@@ -142,7 +142,7 @@ python -m fotohaus.cli --help # command line
 ```
 
 Your library database lives in `~/Library/Application Support/Fotohaus` (set `FOTOHAUS_HOME` to use
-a different place). Run the tests with `python tests/test_fotohaus.py`. To build the app and disk
+a different place). Run the tests with `pip install -r requirements-dev.txt && python tests/test_fotohaus.py`. To build the app and disk
 image, see `packaging/build_mac_app.py`.
 
 ## Support
