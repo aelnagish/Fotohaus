@@ -4,6 +4,18 @@ Fotohaus runs on Macs with Apple Silicon (M1 or newer) and macOS 14 Sonoma or ne
 
 ## Install
 
+### With Homebrew
+
+```bash
+brew install --cask aelnagish/tap/fotohaus
+```
+
+This installs Fotohaus into Applications, adds the `fotohaus-cli` command, and takes care of the
+first-launch warning below, so you can skip *First launch*. Update with `brew upgrade --cask fotohaus`;
+remove with `brew uninstall --cask fotohaus` (add `--zap` to also remove the library database).
+
+### From the disk image
+
 1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases).
 2. Open the disk image and drag **Fotohaus** into the **Applications** folder.
 

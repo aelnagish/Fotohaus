@@ -156,6 +156,14 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
 
 Fotohaus runs on Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.
 
+**With Homebrew** (opens without the first-launch warning, and adds `fotohaus-cli`):
+
+```bash
+brew install --cask aelnagish/tap/fotohaus
+```
+
+**Or download it yourself:**
+
 1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases).
 2. Open the disk image and drag **Fotohaus** into **Applications**.
 3. Open Fotohaus. It isn't notarized by Apple yet, so macOS blocks it the first time:
