@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotohaus: a private photo organizer for the Mac</title>
+<meta name="description" content="Fotohaus organizes the photo folders already on your Mac. Faces, search, memories and non-destructive editing, all on your Mac. Free and open source.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:title" content="Fotohaus">
+<meta property="og:description" content="A fast, private photo organizer for the Mac. Free and open source.">
+<meta property="og:image" content="https://aelnagish.github.io/fotohaus/assets/library.jpg">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#143d49">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:ital,wght@0,400;0,600;1,400&family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --harbour:#143d49;   /* page */
+  --deep:#0e2f38;      /* alternate bands */
+  --tide:#1d5262;      /* lines, hovers */
+  --paper:#fcf8ef;     /* photo prints, headings */
+  --mist:#c9dcdb;      /* body text */
+  --haze:#93b3b3;      /* quiet text */
+  --apricot:#f3ae7a;   /* the one accent: sun in the icon */
+  --sun:#f7d9a0;
+  --ink:#1f2a2c;       /* text on paper */
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Figtree",ui-sans-serif,system-ui,sans-serif;
+  --hand:"Caveat","Bradley Hand",cursive;
+  --wrap:1160px;
+  --gutter:clamp(16px,4vw,40px);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--harbour);color:var(--mist);font:400 1.0625rem/1.65 var(--body);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+img,video{display:block;max-width:100%;height:auto}
+a{color:var(--paper);text-underline-offset:.2em;text-decoration-thickness:1px}
+a:hover{color:var(--sun)}
+:focus-visible{outline:2px solid var(--sun);outline-offset:3px;border-radius:4px}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 var(--gutter)}
+h1,h2,h3{font-family:var(--display);color:var(--paper);margin:0;font-weight:800;letter-spacing:-.02em}
+h1{font-size:clamp(2.6rem,6vw,4.6rem);line-height:1;letter-spacing:-.018em;font-variation-settings:"opsz" 96}
+h2{font-size:clamp(1.9rem,3.6vw,2.75rem);line-height:1.05;font-variation-settings:"opsz" 72}
+h3{font-size:1.25rem;line-height:1.25;font-weight:700;letter-spacing:-.01em}
+p{margin:0}
+kbd{font:600 .85em var(--body);color:var(--paper);background:var(--tide);border-radius:5px;padding:.05em .45em;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
+code{font:500 .9em ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--sun)}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--paper);
+  font:800 1.35rem/1 var(--display);letter-spacing:-.02em}
+.brand img{width:40px;height:40px}
+.top nav{display:flex;gap:22px;align-items:center;font-size:.95rem}
+.top nav a{text-decoration:none;color:var(--mist)}
+.top nav a:hover{color:var(--paper)}
+@media (max-width:640px){.top nav .hide-sm{display:none}}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:10px;font:600 1.05rem/1 var(--body);text-decoration:none;
+  border-radius:999px;padding:16px 26px;transition:transform .15s ease,background .15s ease}
+.btn-main{background:var(--apricot);color:#2a1a0e}
+.btn-main:hover{background:var(--sun);color:#2a1a0e;transform:translateY(-1px)}
+.btn-ghost{color:var(--paper);box-shadow:inset 0 0 0 1.5px var(--tide)}
+.btn-ghost:hover{color:var(--paper);box-shadow:inset 0 0 0 1.5px var(--haze)}
+.btn svg{width:20px;height:20px;flex:none}
+.req{font-size:.9rem;color:var(--haze);margin-top:14px}
+
+/* ---------- prints: the one bold idea ---------- */
+.print{background:var(--paper);padding:10px 10px 0;border-radius:3px;margin:0;
+  box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 22px 40px -18px rgba(0,0,0,.55),0 4px 10px rgba(0,0,0,.18)}
+.print .shot{background:#dfe6e6;border-radius:1px;overflow:hidden;aspect-ratio:var(--ar,1200/818)}
+.print .shot>*{width:100%;height:100%;object-fit:cover}
+.print figcaption{font:600 clamp(1.25rem,2.2vw,1.6rem)/1.1 var(--hand);color:var(--ink);padding:12px 6px 14px;text-align:center}
+.tilt-l{transform:rotate(-1.6deg)}
+.tilt-r{transform:rotate(1.4deg)}
+
+/* ---------- hero ---------- */
+.hero{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(28px,5vw,64px);align-items:center;
+  padding:clamp(28px,6vw,72px) 0 clamp(56px,8vw,104px)}
+.hero .lede{font-size:clamp(1.1rem,1.6vw,1.25rem);max-width:34ch;margin:22px 0 32px;color:var(--mist)}
+.hero .ctas{display:flex;flex-wrap:wrap;gap:12px}
+.stack{position:relative;padding:4% 3% 2%}
+.stack .back{position:absolute;inset:6% 8% 10% 8%;background:var(--paper);border-radius:3px;opacity:.9;
+  transform:rotate(-3.5deg);box-shadow:0 18px 30px -16px rgba(0,0,0,.6)}
+.stack .back.b2{inset:8% 4% 6% 6%;transform:rotate(4deg);opacity:.7}
+.stack .print{position:relative}
+@media (max-width:880px){.hero{grid-template-columns:1fr}.stack{max-width:640px}}
+
+/* page-load moment: the prints drop onto the table once */
+@media (prefers-reduced-motion:no-preference){
+  .stack .back{animation:drop .9s cubic-bezier(.2,.7,.2,1) both}
+  .stack .back.b2{animation-delay:.08s}
+  .stack .print{animation:drop .9s .16s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes drop{from{opacity:0;translate:0 -18px;scale:1.03}}
+}
+
+/* ---------- feature rows ---------- */
+.band{padding:clamp(64px,9vw,120px) 0}
+.band.alt{background:var(--deep)}
+.row{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(28px,5vw,72px);align-items:center}
+.row.flip{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+.row.flip .text{order:2}
+.text p{margin-top:18px;max-width:46ch}
+.text ul{margin:20px 0 0;padding:0;list-style:none;max-width:46ch}
+.text li{padding:9px 0 9px 26px;position:relative;border-top:1px solid var(--tide)}
+.text li::before{content:"";position:absolute;left:4px;top:1.05em;width:9px;height:9px;border-radius:50%;background:var(--apricot)}
+@media (max-width:880px){.row,.row.flip{grid-template-columns:1fr}.row.flip .text{order:0}}
+
+/* ---------- quiet sections ---------- */
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(24px,4vw,56px);margin-top:44px}
+.trio h3{margin-bottom:8px}
+.trio .glyph{width:34px;height:34px;color:var(--apricot);margin-bottom:14px}
+@media (max-width:760px){.trio{grid-template-columns:1fr}}
+
+.picasa{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,5vw,72px);align-items:start}
+.picasa .ini{background:var(--deep);border-radius:10px;padding:22px 24px;font:500 .95rem/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--mist);overflow-x:auto;white-space:pre}
+.picasa .ini b{color:var(--sun);font-weight:500}
+@media (max-width:760px){.picasa{grid-template-columns:1fr}}
+
+.all{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(24px,3vw,40px);margin-top:44px}
+.all h3{padding-bottom:10px;border-bottom:2px solid var(--apricot);margin-bottom:12px;display:inline-block}
+.all ul{margin:0;padding:0;list-style:none;font-size:.98rem}
+.all li{padding:6px 0}
+@media (max-width:980px){.all{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.all{grid-template-columns:1fr}}
+.formats{margin-top:40px;max-width:70ch;color:var(--haze);font-size:.98rem}
+
+/* install: a real sequence, so it is numbered */
+.steps{counter-reset:s;margin:40px 0 0;padding:0;list-style:none;display:grid;gap:22px;max-width:760px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:16px}
+.steps li::before{content:counter(s);font:800 1.3rem/44px var(--display);color:#2a1a0e;background:var(--apricot);
+  width:44px;height:44px;border-radius:50%;text-align:center}
+.steps h3{margin:8px 0 6px}
+.steps .note{margin-top:10px;font-size:.95rem;color:var(--haze)}
+
+.faq{max-width:760px;margin-top:36px}
+.faq details{border-top:1px solid var(--tide)}
+.faq details:last-child{border-bottom:1px solid var(--tide)}
+.faq summary{cursor:pointer;list-style:none;padding:20px 40px 20px 0;position:relative;
+  font:700 1.15rem/1.3 var(--display);color:var(--paper)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"";position:absolute;right:6px;top:50%;width:12px;height:12px;margin-top:-9px;
+  border-right:2px solid var(--apricot);border-bottom:2px solid var(--apricot);transform:rotate(45deg);transition:transform .2s ease}
+.faq details[open] summary::after{transform:rotate(225deg);margin-top:-3px}
+.faq details p{padding:0 0 20px;max-width:62ch}
+
+.support{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:28px;align-items:center;
+  background:var(--deep);border-radius:16px;padding:clamp(24px,4vw,44px)}
+.support img{width:72px;height:72px}
+@media (max-width:760px){.support{grid-template-columns:1fr}}
+
+footer{padding:48px 0 64px;color:var(--haze);font-size:.92rem}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between}
+footer a{color:var(--mist)}
+.sub{margin-top:14px;max-width:60ch}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="assets/icon-256.png" alt="" width="40" height="40">Fotohaus</a>
+    <nav aria-label="Main">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#install">Install</a>
+      <a class="hide-sm" href="#faq">FAQ</a>
+      <a href="https://github.com/aelnagish/fotohaus">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+  <section class="hero">
+    <div>
+      <h1>Every photo you’ve taken, at home on your Mac.</h1>
+      <p class="lede">Fotohaus sorts the folders you already have into a library you can search, edit and enjoy. Nothing is uploaded and nothing is moved.</p>
+      <div class="ctas">
+        <a class="btn btn-main" href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.0/Fotohaus-1.0.0-arm64.dmg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/aelnagish/fotohaus">Source on GitHub</a>
+      </div>
+      <p class="req">Version 1.0.0 · free · Apple silicon, macOS 14 or newer</p>
+    </div>
+    <div class="stack">
+      <div class="back" aria-hidden="true"></div>
+      <div class="back b2" aria-hidden="true"></div>
+      <figure class="print tilt-r">
+        <div class="shot" style="--ar:1280/800">
+          <video data-clip src="assets/clips/library.mp4" poster="assets/clips/library.jpg" muted loop playsinline preload="metadata" aria-label="Fotohaus library: scrolling through photos grouped by folder, then opening one"></video>
+        </div>
+        <figcaption>Years of folders, sorted in minutes</figcaption>
+      </figure>
+    </div>
+  </section>
+  </main>
+</div>
+
+<section class="band alt" id="features">
+  <div class="wrap row">
+    <div class="text">
+      <h2>Flip through a folder in a blink</h2>
+      <p>Double-click any photo in Finder and it opens straight away over your desktop. Press <kbd>←</kbd> and <kbd>→</kbd> to move through the rest of the folder. There’s nothing to import first.</p>
+      <ul>
+        <li>Zoom with the scroll wheel, star or rotate as you go</li>
+        <li>A filmstrip of the whole folder along the bottom</li>
+        <li><kbd>Esc</kbd> takes you back to what you were doing</li>
+      </ul>
+    </div>
+    <figure class="print tilt-l">
+      <div class="shot" style="--ar:1280/800">
+        <video data-clip src="assets/clips/viewer.mp4" poster="assets/clips/viewer.jpg" muted loop playsinline preload="metadata" aria-label="The photo viewer moving through a folder with the arrow keys"></video>
+      </div>
+      <figcaption>← → through a whole folder</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap row flip">
+    <div class="text">
+      <h2>Find anyone, and anything</h2>
+      <p>Type a name, a place, a year or what’s in the picture. Fotohaus recognises faces, objects, scenes and even the words in a photo, all on your Mac.</p>
+      <ul>
+        <li>Name a face once and Fotohaus suggests the same person across the years</li>
+        <li>Search for “receipt” or a street sign and find the picture</li>
+        <li>Combine filters: <code>person:anna place:zermatt year:2019</code></li>
+      </ul>
+    </div>
+    <figure class="print tilt-r">
+      <div class="shot" style="--ar:1280/800">
+        <video data-clip src="assets/clips/search.mp4" poster="assets/clips/search.jpg" muted loop playsinline preload="metadata" aria-label="Typing a search and watching the library filter as you type"></video>
+      </div>
+      <figcaption>Results while you type</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap row">
+    <div class="text">
+      <h2>Edit without fear</h2>
+      <p>One-click fixes, fine tuning and more than 40 effects. Your original is always kept, so every change can be undone, even years later.</p>
+      <ul>
+        <li>Auto enhance, straighten, crop, red-eye and retouch</li>
+        <li>Light, shadows, highlights and colour temperature</li>
+        <li>Copy a look and paste it onto a whole batch</li>
+      </ul>
+    </div>
+    <figure class="print tilt-l">
+      <div class="shot" style="--ar:1280/800">
+        <video data-clip src="assets/clips/editor.mp4" poster="assets/clips/editor.jpg" muted loop playsinline preload="metadata" aria-label="Trying effects on a photo in the editor"></video>
+      </div>
+      <figcaption>Try it, undo it, try another</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap row flip">
+    <div class="text">
+      <h2>On this day</h2>
+      <p>Each day Fotohaus gathers the pictures you took on today’s date in earlier years, ready to play as a slideshow. Every photo also knows where it was taken, worked out offline from a built-in atlas.</p>
+      <ul>
+        <li>“2 years ago”, “3 years ago”, right at the top of your library</li>
+        <li>A Places map with real town names</li>
+        <li>Search for a town and see every photo from there</li>
+      </ul>
+    </div>
+    <figure class="print tilt-r">
+      <div class="shot" style="--ar:1280/800">
+        <video data-clip src="assets/clips/memories.mp4" poster="assets/clips/memories.jpg" muted loop playsinline preload="metadata" aria-label="Memories: photos from this day in earlier years"></video>
+      </div>
+      <figcaption>Two years ago today</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>Private by design</h2>
+    <p class="sub">There’s no account and no cloud. Faces, search and editing all run on your Mac, and your photos stay in the folders you put them in.</p>
+    <div class="trio">
+      <div>
+        <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>
+        <h3>Private collection</h3>
+        <p>Move pictures to Private and they disappear from the library, search and Memories. Opening it takes Touch ID or your Mac password.</p>
+      </div>
+      <div>
+        <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>
+        <h3>Archive</h3>
+        <p>Tuck away screenshots and receipts you want to keep but not see every day. They stay on disk and come back with one click.</p>
+      </div>
+      <div>
+        <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/><path d="M12 11v4.5l2 1.2"/></svg>
+        <h3>Recently Deleted</h3>
+        <p>Anything you delete waits 30 days before it goes to the Trash, so a slip of the finger is never final.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap picasa">
+    <div>
+      <h2>Coming from Picasa?</h2>
+      <p class="sub">Point Fotohaus at your old Picasa folders and your stars, captions, albums, face tags and edits are all there. They’re read straight from the <code>.picasa.ini</code> files Picasa left behind, and Fotohaus keeps writing them, so nothing is locked in.</p>
+    </div>
+    <div class="ini" aria-label="Example .picasa.ini file">[Picasa]
+name=<b>2019 Zermatt</b>
+[IMG_2041.jpg]
+star=<b>yes</b>
+caption=<b>First light over the Matterhorn</b>
+filters=<b>enhance=1;sepia=1;</b>
+faces=<b>rect64(3f845bcb59418507),8e62398ebda8c1a5</b></div>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>Everything else it does</h2>
+    <div class="all">
+      <div>
+        <h3>Organize</h3>
+        <ul>
+          <li>Stars, captions, nested tags and albums</li>
+          <li>Photo Tray for pictures from many folders</li>
+          <li>Stacks for RAW+JPEG pairs, bursts and Live Photos</li>
+          <li>Rename, move, split folders and fix dates</li>
+          <li>Import from cameras and cards, skipping duplicates</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Find</h3>
+        <ul>
+          <li>Faces, recognised on your Mac</li>
+          <li>Objects, scenes and text inside photos</li>
+          <li>Optional natural-language search</li>
+          <li>Duplicate finder that keeps the best copy</li>
+          <li>Timeline and Places map</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Edit</h3>
+        <ul>
+          <li>One-click fixes and fine tuning</li>
+          <li>More than 40 creative effects</li>
+          <li>Retouch, text, denoise and clarity</li>
+          <li>Originals always kept</li>
+          <li>Batch edits and copy-paste a look</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Share and create</h3>
+        <ul>
+          <li>Collages, slideshows and movies with music</li>
+          <li>Posters, contact sheets and passport photos</li>
+          <li>Print, PDF, email and the Share menu</li>
+          <li>Web gallery and map export</li>
+          <li>Backups to any drive, with restore</li>
+        </ul>
+      </div>
+    </div>
+    <p class="formats">Reads JPEG, HEIC, AVIF, PNG, TIFF, WebP, GIF, PSD, camera RAW (CR2, CR3, NEF, ARW, DNG, RAF and more) and common video formats. A command line, <code>fotohaus-cli</code>, and an MCP server let you search and organise from the Terminal or an AI assistant.</p>
+  </div>
+</section>
+
+<section class="band" id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">Fotohaus runs on Apple silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.</p>
+    <ol class="steps">
+      <li><div>
+        <h3>Download the disk image</h3>
+        <p><a href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.0/Fotohaus-1.0.0-arm64.dmg">Fotohaus-1.0.0-arm64.dmg</a> (200 MB), or browse <a href="https://github.com/aelnagish/fotohaus/releases">all releases</a>.</p>
+      </div></li>
+      <li><div>
+        <h3>Drag Fotohaus into Applications</h3>
+        <p>Open the disk image and drag the app onto the Applications folder.</p>
+      </div></li>
+      <li><div>
+        <h3>Open it the first time</h3>
+        <p>Fotohaus isn’t notarized by Apple yet, so macOS asks before the first launch. If it says it <em>could not verify</em> Fotohaus, open System Settings › Privacy &amp; Security and click <strong>Open Anyway</strong>.</p>
+        <p class="note">If it says the app <em>is damaged</em>, click Cancel and run this once in Terminal: <code>xattr -cr /Applications/Fotohaus.app</code>. Nothing is wrong with the app; that’s how macOS treats apps from the internet that aren’t notarized.</p>
+      </div></li>
+    </ol>
+  </div>
+</section>
+
+<section class="band alt" id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="faq">
+      <details>
+        <summary>Does Fotohaus upload my photos anywhere?</summary>
+        <p>No. Face recognition, search, place names and editing all run on your Mac. There’s no account, no cloud and no tracking.</p>
+      </details>
+      <details>
+        <summary>Will it move or change my files?</summary>
+        <p>No. Fotohaus works on your folders where they are. Edits are stored alongside the photo and your original is kept, so you can always go back.</p>
+      </details>
+      <details>
+        <summary>Can I use it alongside Apple Photos?</summary>
+        <p>Yes. Fotohaus doesn’t touch the Photos library. Point it at any folders you like, including exports from Photos or Google Takeout.</p>
+      </details>
+      <details>
+        <summary>Does it run on Intel Macs?</summary>
+        <p>Not at the moment. Fotohaus needs an Apple silicon Mac (M1 or newer) with macOS 14 or newer.</p>
+      </details>
+      <details>
+        <summary>Is it really free?</summary>
+        <p>Yes. Fotohaus is free software under the GNU General Public License, version 3 or later. You can use, study, share and change it.</p>
+      </details>
+      <details>
+        <summary>How do I uninstall it?</summary>
+        <p>Drag Fotohaus from Applications to the Trash. Your library data lives in <code>~/Library/Application Support/Fotohaus</code>; delete that folder too if you want it gone completely. Your photos are never touched.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="support">
+      <img src="assets/icon-256.png" alt="" width="72" height="72">
+      <div>
+        <h3>Fotohaus is a free side project</h3>
+        <p style="margin-top:6px">If it saved you an afternoon of sorting photos, you can buy me a coffee. Bug reports and ideas are welcome on GitHub.</p>
+      </div>
+      <a class="btn btn-main" href="https://buymeacoffee.com/aelnagish">Buy me a coffee</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Abdullah Yusuf · Fotohaus is licensed under the <a href="https://github.com/aelnagish/fotohaus/blob/main/LICENSE">GPL-3.0</a></span>
+    <span><a href="https://github.com/aelnagish/fotohaus/issues">Report a bug</a> · <a href="https://github.com/aelnagish/fotohaus/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/aelnagish/fotohaus">Source</a></span>
+  </div>
+</footer>
+
+<script>
+// Play each clip only while it's on screen; respect reduced motion.
+(function(){
+  var clips=document.querySelectorAll('video[data-clip]');
+  var still=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(still||!('IntersectionObserver' in window)){
+    clips.forEach(function(v){v.controls=true});
+    return;
+  }
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      var v=e.target;
+      if(e.isIntersecting){var p=v.play();if(p&&p.catch)p.catch(function(){v.controls=true})}
+      else v.pause();
+    });
+  },{threshold:.35});
+  clips.forEach(function(v){io.observe(v)});
+})();
+</script>
+</body>
+</html>
