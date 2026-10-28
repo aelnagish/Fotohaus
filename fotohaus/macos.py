@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
@@ -396,6 +397,14 @@ def _wait_responsive(done) -> None:
         QCoreApplication.processEvents(QEventLoop.AllEvents, 50)
 
 
+def _wait_until(event, seconds: float) -> None:
+    """Like _wait_responsive, but gives up after a while."""
+    from PySide6.QtCore import QCoreApplication, QEventLoop
+    end = time.monotonic() + seconds
+    while not event.wait(0.05) and time.monotonic() < end:
+        QCoreApplication.processEvents(QEventLoop.AllEvents, 50)
+
+
 def _touch_id(reason: str) -> bool | None:
     """True/False from Touch ID or the Mac password; None if it can't be used here."""
     try:
@@ -429,11 +438,12 @@ def _windows_hello(reason: str) -> bool | None:
             UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability)
     except Exception:
         return None
-    done = threading.Event()
+    checked, done = threading.Event(), threading.Event()
     result: dict = {"ok": None}
 
     async def ask():
         avail = await UserConsentVerifier.check_availability_async()
+        checked.set()
         if avail != UserConsentVerifierAvailability.AVAILABLE:
             return None
         res = await UserConsentVerifier.request_verification_async(f"Fotohaus wants to {reason}")
@@ -445,9 +455,17 @@ def _windows_hello(reason: str) -> bool | None:
         except Exception:
             result["ok"] = None
         finally:
+            checked.set()
             done.set()
 
     threading.Thread(target=run, daemon=True).start()
+    # if Windows Hello doesn't even say whether it's set up (no session, broken service), use the
+    # Fotohaus password rather than wait forever; once its prompt is up, wait for the user
+    deadline = time.monotonic() + 10
+    while not checked.is_set() and time.monotonic() < deadline:
+        _wait_until(checked, 0.25)
+    if not checked.is_set():
+        return None
     _wait_responsive(done)
     return result["ok"]
 

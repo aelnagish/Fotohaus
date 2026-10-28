@@ -397,6 +397,8 @@ def test_ui_click_through():
     QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Ok)
     QInputDialog.getText = staticmethod(lambda *a, **k: ("Anna", True))
     QInputDialog.getItem = staticmethod(lambda *a, **k: ("Anna", True))
+    import fotohaus.macos as _macos
+    _macos.authenticate = lambda reason="": True    # no Touch ID / Windows Hello on a test machine
     import fotohaus.ui.mainwindow as MW
     lib, root = _lib()
     for i in range(6):
