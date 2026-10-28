@@ -46,6 +46,20 @@ def main(argv=None) -> int:
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName(APP_NAME)
+    # One Fotohaus per library: if one is already running, give it our photos and folders and quit.
+    from PySide6.QtCore import QLockFile
+    from . import instance
+    from .paths import DATA_DIR
+    start_paths = [a for a in argv[1:] if os.path.exists(a)]
+    name = instance.server_name(DATA_DIR)
+    startup_lock = QLockFile(str(DATA_DIR / "instance.lock"))   # several files opened at once start
+    startup_lock.tryLock(5000)                                   # several copies: let them queue up
+    try:
+        if instance.send_to_running(name, start_paths):
+            return 0
+        server = instance.InstanceServer(name)
+    finally:
+        startup_lock.unlock()
     icon_path = os.path.join(os.path.dirname(__file__), "resources", "icon.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
@@ -88,7 +102,38 @@ def main(argv=None) -> int:
             else:
                 self.open_viewer(path)
 
+        def from_other_launch(self, paths):
+            """Photos or folders sent by a second launch (Windows / Linux double-click)."""
+            for p in paths:
+                if os.path.exists(p):
+                    self.open_path(p)
+            if not paths:          # launched again from the Start menu / dock: come to the front
+                v = self._live_viewers()
+                if v:
+                    v[-1].raise_()
+                    v[-1].activateWindow()
+                else:
+                    self.show_main()
+
+        def _live_viewers(self):
+            out = []
+            for v in self.viewers:
+                try:
+                    if v.isVisible():
+                        out.append(v)
+                except RuntimeError:          # already deleted on the C++ side
+                    pass
+            return out
+
         def open_viewer(self, path):
+            if lib.settings.get("viewer_reuse", True):
+                live = self._live_viewers()
+                if live:
+                    v = live[-1]
+                    self.viewers.remove(v)
+                    self.viewers.append(v)    # most recently used goes last
+                    v.open_path(path)
+                    return
             from .ui.viewer import PhotoViewer
             v = PhotoViewer(lib, path)
             v.edit_requested.connect(lambda p, v=v: (v.close(), self.edit(p)))
@@ -106,6 +151,8 @@ def main(argv=None) -> int:
                 m.open_editor(row["id"])
 
     ctl = Controller()
+    server.received.connect(ctl.from_other_launch)
+    app._instance_server = server
     for a in argv[1:]:
         if os.path.exists(a):
             ctl.open_path(a)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QDir, QIdentityProxyModel, QObject, QRectF, QRunnable, QSize, Qt, Signal
@@ -264,7 +265,13 @@ class OptionsDialog(QDialog):
         self.open_in.addItem("Photo Viewer", "viewer")
         self.open_in.addItem("Edit view", "editor")
         self.open_in.setCurrentIndex(0 if s.get("open_files_in") != "editor" else 1)
-        g.row("Open files from Finder in:", self.open_in)
+        fm_name = {"darwin": "Finder", "win32": "File Explorer"}.get(sys.platform, "the file manager")
+        g.row(f"Open files from {fm_name} in:", self.open_in)
+        self.viewer_reuse = QComboBox()
+        self.viewer_reuse.addItem("Show the new photo in the open viewer", True)
+        self.viewer_reuse.addItem("Open a new viewer window", False)
+        self.viewer_reuse.setCurrentIndex(0 if s.get("viewer_reuse", True) else 1)
+        g.row("When a viewer is already open:", self.viewer_reuse)
         self.caption = QComboBox()
         for k, label in (("none", "None"), ("filename", "Filename"), ("caption", "Caption"),
                          ("resolution", "Resolution"), ("date", "Date taken"), ("tags", "Tags")):
@@ -594,6 +601,7 @@ class OptionsDialog(QDialog):
             s.set("thumb_size", int(self.thumb_size.currentData()))
         self._preview_look()
         s.set("open_files_in", self.open_in.currentData())
+        s.set("viewer_reuse", bool(self.viewer_reuse.currentData()))
         s.set("thumb_caption", self.caption.currentData())
         s.set("map_tiles", self.tiles.isChecked())
         s.set("file_types", [e for e, cb in self.type_checks.items() if not cb.isChecked()])

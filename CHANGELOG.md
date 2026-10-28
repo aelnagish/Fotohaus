@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Photo Viewer: a photo opened while the viewer is already up now shows in that viewer, and ← and →
+  move through its folder. *Tools ▸ Options ▸ When a viewer is already open* can bring back a new
+  window for each photo
+- Groundwork for Windows and Linux:
+  - Only one Fotohaus runs per library: opening more photos from File Explorer or the file
+    manager hands them to the copy that is already open
+  - The Private collection is locked with Windows Hello on Windows, and with a Fotohaus password
+    wherever Touch ID or Windows Hello isn't available (before, it opened without asking off macOS)
+  - On Windows the library is kept in `%LOCALAPPDATA%\Fotohaus`
+
 ## 1.0.1 — 2026-10-28
 
 - Photo Viewer: the mouse wheel now zooms in and out around the pointer with every mouse,
