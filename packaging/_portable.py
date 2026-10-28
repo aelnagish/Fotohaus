@@ -133,6 +133,10 @@ def prune_site(site: Path) -> None:
         for f in d.iterdir():   # keep license files and metadata only
             if f.is_file() and not f.name.upper().startswith(("LICENSE", "COPYING", "METADATA", "NOTICE")):
                 f.unlink()
+    for pkg in ("numpy", "PIL", "cv2", "av", "onnxruntime", "rawpy", "pillow_heif"):
+        for t in list((site / pkg).rglob("tests")) if (site / pkg).exists() else []:
+            if t.is_dir():
+                shutil.rmtree(t, ignore_errors=True)   # the packages' own test suites
     for p in list(site.rglob("__pycache__")):
         shutil.rmtree(p, ignore_errors=True)
 
