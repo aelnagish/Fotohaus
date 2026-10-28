@@ -138,6 +138,22 @@ code{font:500 .9em ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--sun)}
 .brewbox p{margin-top:6px}
 .brewbox pre{margin:14px 0 0;padding:14px 16px;background:var(--harbour);border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 .brewbox pre code{font-size:.95rem}
+/* first launch: the one step people trip over, so it gets its own box */
+.firstrun{font-size:.9rem;color:var(--sun);margin-top:10px}
+.firstrun a{color:var(--sun)}
+.heads{margin-top:32px;max-width:760px;border:2px solid var(--apricot);border-radius:12px;padding:20px 24px;
+  background:rgba(243,174,122,.08)}
+.heads h3{color:var(--paper);display:flex;align-items:center;gap:10px}
+.heads h3 svg{flex:none;width:24px;height:24px;color:var(--apricot)}
+.heads ol{margin:12px 0 0;padding-left:1.3em}
+.heads li{padding:4px 0}
+.cmd{display:flex;gap:10px;align-items:stretch;margin:10px 0 4px;flex-wrap:wrap}
+.cmd pre{flex:1 1 260px;margin:0;padding:12px 14px;background:var(--harbour);border-radius:8px;
+  white-space:pre-wrap;overflow-wrap:anywhere}
+.cmd button{flex:none;font:600 .9rem var(--body);color:#2a1a0e;background:var(--apricot);border:0;border-radius:8px;
+  padding:0 16px;min-height:44px;cursor:pointer}
+.cmd button:hover{background:var(--sun)}
+.heads .quiet{color:var(--haze);font-size:.95rem;margin-top:10px}
 .or{margin-top:40px}
 .steps{counter-reset:s;margin:24px 0 0;padding:0;list-style:none;display:grid;gap:22px;max-width:760px}
 .steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:16px}
@@ -195,6 +211,7 @@ footer a{color:var(--mist)}
       </div>
       <p class="req">Version 1.0.0 · free · Apple silicon, macOS 14 or newer</p>
       <p class="brew">Or with Homebrew: <code>brew install --cask aelnagish/tap/fotohaus</code></p>
+      <p class="firstrun">First launch: if macOS says Fotohaus “is damaged”, click Cancel, not Move to Trash. <a href="#first-launch">Here’s the one-line fix.</a></p>
     </div>
     <div class="stack">
       <div class="back" aria-hidden="true"></div>
@@ -383,6 +400,19 @@ faces=<b>rect64(3f845bcb59418507),8e62398ebda8c1a5</b></div>
   <div class="wrap">
     <h2>Install</h2>
     <p class="sub">Fotohaus runs on Apple silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.</p>
+    <div class="heads" id="first-launch">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>Says “damaged and can’t be opened”? Click Cancel</h3>
+      <p>Nothing is wrong with Fotohaus. macOS says this about every app from the internet that Apple hasn’t notarized yet. It takes ten seconds to fix, once:</p>
+      <ol>
+        <li>Click <strong>Cancel</strong>, not <em>Move to Trash</em>.</li>
+        <li>Open <strong>Terminal</strong>: press ⌘ Space, type <em>Terminal</em>, press Return.</li>
+        <li>Paste this and press Return:
+          <div class="cmd"><pre><code id="xattr-cmd">xattr -cr /Applications/Fotohaus.app</code></pre><button type="button" id="copy-xattr">Copy</button></div>
+        </li>
+        <li>Open Fotohaus again. That’s it, for this version.</li>
+      </ol>
+      <p class="quiet">If macOS says it <em>could not verify</em> Fotohaus instead, open System Settings › Privacy &amp; Security and click <strong>Open Anyway</strong>. Installing with Homebrew skips this step entirely.</p>
+    </div>
     <div class="brewbox">
       <h3>The quick way: Homebrew</h3>
       <p>One command installs Fotohaus, opens it without the first-launch warning and adds <code>fotohaus-cli</code> to your Terminal.</p>
@@ -400,8 +430,7 @@ faces=<b>rect64(3f845bcb59418507),8e62398ebda8c1a5</b></div>
       </div></li>
       <li><div>
         <h3>Open it the first time</h3>
-        <p>Fotohaus isn’t notarized by Apple yet, so macOS asks before the first launch. If it says it <em>could not verify</em> Fotohaus, open System Settings › Privacy &amp; Security and click <strong>Open Anyway</strong>.</p>
-        <p class="note">If it says the app <em>is damaged</em>, click Cancel and run this once in Terminal: <code>xattr -cr /Applications/Fotohaus.app</code>. Nothing is wrong with the app; that’s how macOS treats apps from the internet that aren’t notarized.</p>
+        <p>Fotohaus isn’t notarized by Apple yet, so macOS asks before the first launch. If it says the app <em>is damaged</em>, click Cancel and follow <a href="#first-launch">the steps above</a>. If it says it <em>could not verify</em> Fotohaus, open System Settings › Privacy &amp; Security and click <strong>Open Anyway</strong>.</p>
       </div></li>
     </ol>
   </div>
@@ -476,6 +505,16 @@ faces=<b>rect64(3f845bcb59418507),8e62398ebda8c1a5</b></div>
     });
   },{threshold:.35});
   clips.forEach(function(v){io.observe(v)});
+})();
+</script>
+<script>
+(function(){
+  var b=document.getElementById("copy-xattr"); if(!b) return;
+  b.addEventListener("click",function(){
+    var t=document.getElementById("xattr-cmd").textContent;
+    var done=function(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy"},1600)};
+    try{navigator.clipboard.writeText(t).then(done,function(){})}catch(e){}
+  });
 })();
 </script>
 </body>
