@@ -12,6 +12,7 @@
 #include <Python.h>
 #include <windows.h>
 #include <stdlib.h>
+#pragma comment(lib, "user32.lib")   /* MessageBoxW */
 
 #ifdef FOTOHAUS_GUI
 /* The app writes no console output; a crash is logged to %LOCALAPPDATA%\Fotohaus\Fotohaus.log. */
