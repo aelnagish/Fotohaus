@@ -38,6 +38,19 @@ VIEWER_TYPES = [
 ]
 
 
+def _spawn(cmd: list[str]) -> None:
+    """Start a helper program (Finder/Explorer, an app) without tying it to Fotohaus: it gets no
+    copy of Fotohaus's input/output, so it can outlive Fotohaus without holding anything open."""
+    kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
+          "close_fds": True}
+    if sys.platform == "win32":
+        kw["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x8) | \
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+    else:
+        kw["start_new_session"] = True
+    subprocess.Popen(cmd, **kw)
+
+
 def applescript_str(s: str) -> str:
     """A quoted AppleScript string literal (paths may contain quotes or backslashes)."""
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -51,9 +64,9 @@ def _ns():
 
 def reveal(path: str) -> None:
     if IS_MAC:
-        subprocess.Popen(["open", "-R", path])
+        _spawn(["open", "-R", path])
     elif IS_WIN:
-        subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
+        _spawn(["explorer", "/select,", os.path.normpath(path)])
     else:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
@@ -124,7 +137,8 @@ def email_files(paths: list[str], subject: str = "", body: str = "") -> bool:
         for p in paths:
             cmd += ["--attach", p]
         try:
-            if subprocess.call(cmd) == 0:
+            if subprocess.call(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL) == 0:
                 return True
         except OSError:
             pass
@@ -242,9 +256,9 @@ def apps_for(path: str) -> list[tuple[str, str]]:
 def open_with(paths: list[str], app_path: str | None) -> None:
     if IS_MAC:
         cmd = ["open"] + (["-a", app_path] if app_path else []) + list(paths)
-        subprocess.Popen(cmd)
+        _spawn(cmd)
     elif app_path:
-        subprocess.Popen([app_path] + list(paths))
+        _spawn([app_path] + list(paths))
     else:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
@@ -371,7 +385,7 @@ def screensaver_folder() -> str:
 
 def open_screensaver_settings() -> None:
     if IS_MAC:
-        subprocess.Popen(["open", "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension"])
+        _spawn(["open", "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension"])
 
 
 # ---------------------------------------------------------------------------- Touch ID / password

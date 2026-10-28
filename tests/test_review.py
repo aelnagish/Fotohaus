@@ -84,8 +84,8 @@ def test_names_with_slash_are_refused():
 # ---------------------------------------------------------------- scanning never forgets unreadable folders
 
 def test_unreadable_folder_keeps_its_data():
-    if os.geteuid() == 0:
-        print("  (skipped as root: permissions are not enforced)")
+    if sys.platform == "win32" or os.geteuid() == 0:
+        print("  (skipped: folder permissions are not enforced here)")
         return
     lib, root = _lib()
     _jpg(root / "Locked" / "a.jpg")
@@ -142,7 +142,8 @@ def test_gps_write_atomic_and_keeps_mode():
     md = media.read_metadata(str(p))
     assert abs(md["lat"] - 47.5) < 1e-4 and abs(md["lon"] + 122.33) < 1e-4
     assert md["taken"] and time.localtime(md["taken"]).tm_year == 2020      # other EXIF kept
-    assert stat.S_IMODE(os.stat(p).st_mode) == 0o640
+    if sys.platform != "win32":          # Windows has no Unix permission bits
+        assert stat.S_IMODE(os.stat(p).st_mode) == 0o640
     assert not [f for f in os.listdir(p.parent) if f.endswith(".tmp")]
     # 59.9999″ must carry into the next minute, never produce 60″
     d, m, s = media._to_dms(10.99999999)
@@ -170,7 +171,8 @@ def test_caption_written_into_jpeg_keeps_mode():
     lib.set_caption(pid, "Grüße aus Aachen")
     from fotohaus import media
     assert media.read_metadata(str(p))["caption"] == "Grüße aus Aachen"
-    assert stat.S_IMODE(os.stat(p).st_mode) == 0o600
+    if sys.platform != "win32":          # Windows has no Unix permission bits
+        assert stat.S_IMODE(os.stat(p).st_mode) == 0o600
 
 
 # ---------------------------------------------------------------- video dates when 'moov' is at the end

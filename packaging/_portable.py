@@ -28,10 +28,10 @@ PBS = {
     "windows": ("x86_64-pc-windows-msvc", "590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5"),
 }
 
-# Same pins as the Mac build, so all three ship the same versions (and the same GPL sources apply).
-REQUIREMENTS = ["PySide6-Essentials==6.9.3", "PySide6-Addons==6.9.3", "av==19.0.1", "numpy", "pillow",
-                "pillow-heif==1.8.1", "opencv-python-headless==5.0.0.93", "piexif", "rawpy", "onnxruntime",
-                "tokenizers"]
+# Pinned in constraints.txt to the versions the Mac app ships (the same GPL sources then apply).
+REQUIREMENTS = ["PySide6-Essentials", "PySide6-Addons", "av", "numpy", "pillow", "pillow-heif",
+                "opencv-python-headless", "piexif", "rawpy", "onnxruntime", "tokenizers"]
+CONSTRAINTS = HERE / "constraints.txt"
 WINDOWS_EXTRA = ["winrt-runtime", "winrt-Windows.Foundation", "winrt-Windows.Security.Credentials.UI"]
 PIP_PLATFORMS = {
     "linux": ["manylinux_2_28_x86_64", "manylinux_2_27_x86_64", "manylinux_2_17_x86_64",
@@ -102,7 +102,7 @@ def install_site(site: Path, target: str, prepared: Path | None = None) -> None:
         return
     reqs = REQUIREMENTS + (WINDOWS_EXTRA if target == "windows" else [])
     cmd = [sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--target", site,
-           "--python-version", PYVER, "--implementation", "cp", "--only-binary=:all:"]
+           "--python-version", PYVER, "--implementation", "cp", "--only-binary=:all:", "-c", CONSTRAINTS]
     for plat in PIP_PLATFORMS[target]:
         cmd += ["--platform", plat]
     run(cmd + reqs)
