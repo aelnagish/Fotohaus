@@ -2,11 +2,29 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
 
 IS_MAC = sys.platform == "darwin"
+IS_WIN = sys.platform == "win32"
+
+# What the system's file browser is called, for menu items like "Show in Finder".
+FILE_MANAGER = "Finder" if IS_MAC else "File Explorer" if IS_WIN else "File Manager"
+SHOW_IN = f"Show in {FILE_MANAGER}"
+TRASH = "Recycle Bin" if IS_WIN else "Trash"
+TRASH_PLACE = "the Mac's Trash" if IS_MAC else f"the {TRASH}"
+UNLOCK_WITH = "Touch ID" if IS_MAC else "Windows Hello" if IS_WIN else "your Fotohaus password"
+
+
+def keys(text: str) -> str:
+    """Shortcut text written with Mac symbols (⌘8, ⇧⌘A) as the reader's keyboard shows it."""
+    if IS_MAC:
+        return text
+    out = re.sub(r"([⌃⌥⇧⌘]+)", lambda m: "".join({"⌃": "Ctrl+", "⌥": "Alt+", "⇧": "Shift+", "⌘": "Ctrl+"}[c]
+                                                  for c in sorted(m.group(1), key="⌘⌃⌥⇧".index)), text)
+    return out.replace("⌫", "Backspace").replace("+Return", "+Enter")
 
 # Uniform Type Identifiers Fotohaus can open (used for "Configure Photo Viewer").
 VIEWER_TYPES = [
@@ -33,6 +51,8 @@ def _ns():
 def reveal(path: str) -> None:
     if IS_MAC:
         subprocess.Popen(["open", "-R", path])
+    elif IS_WIN:
+        subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
     else:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
@@ -69,7 +89,7 @@ def perform_share(service, paths: list[str]) -> bool:
 def share_files(paths: list[str], parent=None) -> None:
     """Show a Share menu (Mail, Messages, AirDrop, Notes, …) at the cursor."""
     from PySide6.QtGui import QCursor
-    from PySide6.QtWidgets import QMenu, QMessageBox
+    from PySide6.QtWidgets import QMenu
     services = sharing_services(paths)
     m = QMenu(parent)
     for title, svc in services:
@@ -77,9 +97,7 @@ def share_files(paths: list[str], parent=None) -> None:
     if services:
         m.addSeparator()
     m.addAction("Email…", lambda: email_files(paths))
-    m.addAction("Show in Finder", lambda: reveal(paths[0]))
-    if not services and not IS_MAC:
-        QMessageBox.information(parent, "Share", "Sharing services are available on macOS.")
+    m.addAction(SHOW_IN, lambda: reveal(paths[0]))
     m.exec(QCursor.pos())
 
 
@@ -99,10 +117,26 @@ def email_files(paths: list[str], subject: str = "", body: str = "") -> bool:
         except Exception:
             pass
         return subprocess.call(["open", "-a", "Mail"] + list(paths)) == 0
+    import shutil
+    if not IS_WIN and shutil.which("xdg-email"):
+        cmd = ["xdg-email"] + (["--subject", subject] if subject else []) + (["--body", body] if body else [])
+        for p in paths:
+            cmd += ["--attach", p]
+        try:
+            if subprocess.call(cmd) == 0:
+                return True
+        except OSError:
+            pass
+    # A mailto: link can't carry attachments, so show the prepared pictures next to the new email
+    # for dragging in.
     try:
+        from urllib.parse import quote
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
-        return QDesktopServices.openUrl(QUrl(f"mailto:?subject={subject}"))
+        ok = QDesktopServices.openUrl(QUrl(f"mailto:?subject={quote(subject)}&body={quote(body)}"))
+        if paths:
+            reveal(paths[0])
+        return ok
     except Exception:
         return False
 
@@ -138,6 +172,42 @@ def set_desktop_picture(path: str) -> bool:
             script = ('tell application "System Events" to tell every desktop to set picture to POSIX file '
                       + applescript_str(path))
             return subprocess.call(["osascript", "-e", script]) == 0
+    if IS_WIN:
+        try:
+            import ctypes
+            SPI_SETDESKWALLPAPER, SPIF_UPDATEINIFILE, SPIF_SENDCHANGE = 20, 1, 2
+            return bool(ctypes.windll.user32.SystemParametersInfoW(
+                SPI_SETDESKWALLPAPER, 0, os.path.abspath(path), SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
+        except Exception:
+            return False
+    return _linux_desktop_picture(path)
+
+
+def _linux_desktop_picture(path: str) -> bool:
+    """GNOME / Cinnamon / MATE via gsettings, KDE Plasma via its scripting interface."""
+    import shutil
+    from pathlib import Path
+    uri = Path(path).resolve().as_uri()
+    desktop = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
+    try:
+        if "kde" in desktop and shutil.which("qdbus"):
+            js = ("desktops().forEach(d => { d.wallpaperPlugin = 'org.kde.image'; "
+                  "d.currentConfigGroup = ['Wallpaper', 'org.kde.image', 'General']; "
+                  f"d.writeConfig('Image', {uri!r}); }});")
+            return subprocess.call(["qdbus", "org.kde.plasmashell", "/PlasmaShell",
+                                    "org.kde.PlasmaShell.evaluateScript", js]) == 0
+        if shutil.which("gsettings"):
+            schemas = [("org.gnome.desktop.background", "picture-uri", uri),
+                       ("org.gnome.desktop.background", "picture-uri-dark", uri),
+                       ("org.cinnamon.desktop.background", "picture-uri", uri),
+                       ("org.mate.background", "picture-filename", os.path.abspath(path))]
+            ok = False
+            for schema, key, value in schemas:
+                ok = subprocess.call(["gsettings", "set", schema, key, value], stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL) == 0 or ok
+            return ok
+    except OSError:
+        pass
     return False
 
 
@@ -172,11 +242,17 @@ def open_with(paths: list[str], app_path: str | None) -> None:
     if IS_MAC:
         cmd = ["open"] + (["-a", app_path] if app_path else []) + list(paths)
         subprocess.Popen(cmd)
+    elif app_path:
+        subprocess.Popen([app_path] + list(paths))
     else:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
         for p in paths:
             QDesktopServices.openUrl(QUrl.fromLocalFile(p))
+
+
+# Screensaver folders are a macOS feature (Photos screen saver pointed at a folder).
+HAS_SCREENSAVER_FOLDER = IS_MAC
 
 
 def bundle_path() -> str | None:
@@ -222,6 +298,65 @@ def set_default_viewer(utis: list[str]) -> list[str]:
     except Exception:
         return list(utis)
     return failed
+
+
+# MIME types for Linux, matching VIEWER_TYPES.
+LINUX_VIEWER_MIME = ["image/jpeg", "image/png", "image/heic", "image/heif", "image/tiff", "image/gif",
+                     "image/webp", "image/bmp", "image/avif", "image/vnd.adobe.photoshop", "image/x-dcraw",
+                     "image/x-adobe-dng", "image/x-canon-cr2", "image/x-canon-cr3", "image/x-nikon-nef",
+                     "image/x-sony-arw", "image/x-fuji-raf", "image/x-panasonic-rw2", "image/x-olympus-orf",
+                     "video/mp4", "video/quicktime", "video/x-msvideo"]
+
+
+def linux_launch_command() -> list[str]:
+    """How the desktop should start this Fotohaus: the AppImage itself, or Python from the source tree."""
+    appimage = os.environ.get("APPIMAGE")
+    if appimage:
+        return [appimage]
+    src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return ["env", f"PYTHONPATH={src}", sys.executable, "-m", "fotohaus"]
+
+
+def install_linux_desktop_entry(make_default: bool = True) -> bool:
+    """Add Fotohaus to the applications menu and "Open With" (a .desktop file and icon in the user's
+    ~/.local/share), and with make_default, make it the default app for photos and videos."""
+    import shlex
+    import shutil
+    from pathlib import Path
+    share = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    apps = share / "applications"
+    icons = share / "icons" / "hicolor" / "256x256" / "apps"
+    apps.mkdir(parents=True, exist_ok=True)
+    icons.mkdir(parents=True, exist_ok=True)
+    src_icon = Path(__file__).resolve().parent / "resources" / "icon.png"
+    try:
+        from PIL import Image
+        with Image.open(src_icon) as im:
+            im.resize((256, 256), Image.LANCZOS).save(icons / "fotohaus.png")
+    except Exception:
+        pass
+    exe = " ".join(shlex.quote(a) for a in linux_launch_command())
+    (apps / "fotohaus.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=Fotohaus\nGenericName=Photo Organizer\n"
+        "Comment=Organize, find and edit your photos, privately\n"
+        f"Exec={exe} %F\nIcon=fotohaus\nTerminal=false\nStartupWMClass=Fotohaus\n"
+        "Categories=Graphics;Photography;Viewer;\n"
+        f"MimeType={';'.join(LINUX_VIEWER_MIME)};inode/directory;\n", encoding="utf-8")
+    if shutil.which("update-desktop-database"):
+        subprocess.call(["update-desktop-database", str(apps)], stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL)
+    if not make_default:
+        return True
+    if not shutil.which("xdg-mime"):
+        return False
+    return subprocess.call(["xdg-mime", "default", "fotohaus.desktop"] + LINUX_VIEWER_MIME) == 0
+
+
+def open_windows_default_apps() -> None:
+    """Windows 10/11 let only the user pick default apps, so open that page of Settings."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+    QDesktopServices.openUrl(QUrl("ms-settings:defaultapps"))
 
 
 # ------------------------------------------------------------------ screensaver folder

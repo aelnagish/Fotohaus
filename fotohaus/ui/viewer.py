@@ -13,7 +13,7 @@ from PySide6.QtCore import (QEvent, QObject, QPointF, QRectF, QRunnable, QSize, 
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QKeySequence, QMovie, QPainter, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton, QWidget
 
-from .. import media, thumbs
+from .. import macos, media, thumbs
 from . import pointer, theme
 
 WHITE = QColor("#f2f2f2")
@@ -180,7 +180,7 @@ class PhotoViewer(QWidget):
         h.addSpacing(10)
         h.addWidget(_Button("rotate-left", "Rotate counterclockwise ([)", lambda: self.rotate(-1)))
         h.addWidget(_Button("rotate-right", "Rotate clockwise (])", lambda: self.rotate(1)))
-        self.b_star = _Button("star-outline", "Star (⌘8)", self.toggle_star, color=theme.STAR)
+        self.b_star = _Button("star-outline", macos.keys("Star (⌘8)"), self.toggle_star, color=theme.STAR)
         h.addWidget(self.b_star)
         self.b_live = _Button("live", "Play Live Photo (L)", self.play_live)
         h.addWidget(self.b_live)
@@ -469,7 +469,7 @@ class PhotoViewer(QWidget):
             self._stop_media()
             ok = self.lib.soft_delete([r["id"]])
         else:
-            if QMessageBox.question(self, "Move to Trash", f"Move “{os.path.basename(path)}” to the Trash?") \
+            if QMessageBox.question(self, f"Move to {macos.TRASH}", f"Move “{os.path.basename(path)}” to the {macos.TRASH}?") \
                     != QMessageBox.Yes:
                 return
             self._stop_media()

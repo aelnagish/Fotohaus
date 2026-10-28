@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDateTimeEdit, QDialog, QDi
                                QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPlainTextEdit, QPushButton,
                                QRadioButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
+from .. import macos
 from .dialogs import default_pictures
 
 
@@ -216,7 +217,8 @@ class GiftDiskDialog(QDialog):
         self.html.setChecked(True)
         f.addRow("", self.html)
         f.addRow(QLabel("Macs no longer burn CDs, so Fotohaus makes a disk image (.dmg) you can copy to a USB "
-                        "stick or share."))
+                        "stick or share." if macos.IS_MAC else
+                        "Fotohaus makes a .zip file you can copy to a USB stick or share."))
         f.addRow(_buttons(self, "Create"))
 
 
@@ -259,7 +261,7 @@ class ShortcutsDialog(QDialog):
             for keys, action in rows:
                 r = t.rowCount()
                 t.insertRow(r)
-                t.setItem(r, 0, QTableWidgetItem(keys))
+                t.setItem(r, 0, QTableWidgetItem(macos.keys(keys)))
                 t.setItem(r, 1, QTableWidgetItem(action))
         t.resizeColumnToContents(0)
         v.addWidget(t)

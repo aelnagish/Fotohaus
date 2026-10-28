@@ -6,7 +6,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QScrollArea, QToolButton, QVBoxLayout, QWidget)
 
-from .. import media
+from .. import macos, media
 from ..ai.dupes import find_duplicates
 
 
@@ -78,11 +78,11 @@ class DupesView(QWidget):
         self.level.setCurrentIndex(1)
         self.level.currentIndexChanged.connect(self.refresh)
         top.addWidget(self.level)
-        trash = QPushButton("Move Marked to Trash")
+        trash = QPushButton(f"Move Marked to {macos.TRASH}")
         trash.clicked.connect(self._trash)
         top.addWidget(trash)
         v.addLayout(top)
-        hint = QLabel("The largest, highest-resolution copy is kept by default. Files are moved to the Trash, "
+        hint = QLabel(f"The largest, highest-resolution copy is kept by default. Files are moved to the {macos.TRASH}, "
                       "so you can restore them.")
         hint.setObjectName("Muted")
         hint.setWordWrap(True)
@@ -120,8 +120,8 @@ class DupesView(QWidget):
         ids = [i for g in self.groups for i in g.to_remove()]
         if not ids:
             return
-        if QMessageBox.question(self, "Move to Trash", f"Move {len(ids)} files to the Trash?") != QMessageBox.Yes:
+        if QMessageBox.question(self, f"Move to {macos.TRASH}", f"Move {len(ids)} files to the {macos.TRASH}?") != QMessageBox.Yes:
             return
         n = self.lib.move_to_trash(ids)
-        QMessageBox.information(self, "Done", f"Moved {n} files to the Trash.")
+        QMessageBox.information(self, "Done", f"Moved {n} files to the {macos.TRASH}.")
         self.refresh()

@@ -361,27 +361,50 @@ class OptionsDialog(QDialog):
 
         # --- Photo Viewer (file associations)
         pv = _Page()
-        pv.heading("Open with Fotohaus")
         self.viewer_checks = {}
-        boxes = []
-        for label, uti in macos.VIEWER_TYPES:
-            cb = QCheckBox(label)
-            cur = macos.default_app_for_type(uti)
-            cb.setChecked(bool(cur and cur.endswith("Fotohaus.app")))
-            cb.setToolTip(f"Currently opens with: {os.path.basename(cur) if cur else 'unknown'}")
-            self.viewer_checks[uti] = cb
-            boxes.append(cb)
-        pv.wide(_grid(boxes, 3))
-        allb = QPushButton("Select All")
-        allb.clicked.connect(lambda: [c.setChecked(True) for c in self.viewer_checks.values()])
-        apply_ = QPushButton("Make Fotohaus the Default")
-        apply_.clicked.connect(self._apply_viewer)
-        for b_ in (allb, apply_):
-            b_.setMinimumWidth(b_.sizeHint().width())
-        pv.wide(_hrow(allb, apply_))
-        pv.note("Use ← and → to browse the folder, Esc to close.")
-        pv.note("Or right-click any photo in Finder and choose Open With ▸ Fotohaus.")
-        pv.finish()
+        if macos.IS_MAC:
+            pv.heading("Open with Fotohaus")
+            self.viewer_checks = {}
+            boxes = []
+            for label, uti in macos.VIEWER_TYPES:
+                cb = QCheckBox(label)
+                cur = macos.default_app_for_type(uti)
+                cb.setChecked(bool(cur and cur.endswith("Fotohaus.app")))
+                cb.setToolTip(f"Currently opens with: {os.path.basename(cur) if cur else 'unknown'}")
+                self.viewer_checks[uti] = cb
+                boxes.append(cb)
+            pv.wide(_grid(boxes, 3))
+            allb = QPushButton("Select All")
+            allb.clicked.connect(lambda: [c.setChecked(True) for c in self.viewer_checks.values()])
+            apply_ = QPushButton("Make Fotohaus the Default")
+            apply_.clicked.connect(self._apply_viewer)
+            for b_ in (allb, apply_):
+                b_.setMinimumWidth(b_.sizeHint().width())
+            pv.wide(_hrow(allb, apply_))
+            pv.note("Use ← and → to browse the folder, Esc to close.")
+            pv.note("Or right-click any photo in Finder and choose Open With ▸ Fotohaus.")
+            pv.finish()
+        elif macos.IS_WIN:
+            pv.heading("Open with Fotohaus")
+            pv.note("Fotohaus is listed under Open with for photos and videos. Windows lets only you "
+                    "choose the default app: in Settings, pick Photos (or a file type such as .jpg) and "
+                    "choose Fotohaus.")
+            ws = QPushButton("Open Default Apps Settings")
+            ws.clicked.connect(macos.open_windows_default_apps)
+            ws.setMinimumWidth(ws.sizeHint().width())
+            pv.wide(_hrow(ws))
+            pv.note("Use ← and → to browse the folder, Esc to close.")
+            pv.finish()
+        else:
+            pv.heading("Open with Fotohaus")
+            pv.note("Adds Fotohaus to your applications menu and makes it the app that opens photos and "
+                    "videos when you double-click them.")
+            lx = QPushButton("Make Fotohaus the Default")
+            lx.clicked.connect(self._apply_viewer_linux)
+            lx.setMinimumWidth(lx.sizeHint().width())
+            pv.wide(_hrow(lx))
+            pv.note("Use ← and → to browse the folder, Esc to close.")
+            pv.finish()
         tabs.addTab(pv, "Photo Viewer")
 
         # --- Name tags & metadata
@@ -538,6 +561,13 @@ class OptionsDialog(QDialog):
     def set_page(self, i: int) -> None:
         if 0 <= i < self.tabs.count():
             self.tabs.setCurrentIndex(i)
+
+    def _apply_viewer_linux(self):
+        ok = macos.install_linux_desktop_entry(make_default=True)
+        QMessageBox.information(self, "Photo Viewer", "Done. Double-clicking photos and videos now opens "
+                                "Fotohaus's Photo Viewer." if ok else
+                                "Fotohaus was added to your applications menu, but the defaults couldn't be "
+                                "changed (xdg-mime is missing). Choose Fotohaus in Open With instead.")
 
     def _apply_viewer(self):
         chosen = [u for u, cb in self.viewer_checks.items() if cb.isChecked()]

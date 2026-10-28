@@ -491,6 +491,30 @@ def test_items_around_ignores_case_where_the_os_does():
         assert i == 0 and len(items) == 4
 
 
+def test_platform_wording_and_linux_desktop_entry():
+    from fotohaus import macos
+    if sys.platform != "darwin":
+        assert macos.keys("Archive (⇧⌘A)") == "Archive (Ctrl+Shift+A)"
+        assert macos.keys("⌘⌫") == "Ctrl+Backspace" and macos.keys("⌥⌘A") == "Ctrl+Alt+A"
+        assert "Finder" not in macos.SHOW_IN and not macos.HAS_SCREENSAVER_FOLDER
+    else:
+        assert macos.keys("⇧⌘A") == "⇧⌘A"
+    if sys.platform.startswith("linux"):
+        share = Path(tempfile.mkdtemp())
+        saved = {k: os.environ.get(k) for k in ("XDG_DATA_HOME", "APPIMAGE")}
+        os.environ["XDG_DATA_HOME"] = str(share)
+        os.environ["APPIMAGE"] = "/opt/My Apps/Fotohaus.AppImage"
+        try:
+            macos.install_linux_desktop_entry(make_default=False)
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        entry = (share / "applications" / "fotohaus.desktop").read_text()
+        assert "Exec='/opt/My Apps/Fotohaus.AppImage' %F" in entry
+        assert "image/jpeg;" in entry and "Icon=fotohaus" in entry
+        assert (share / "icons" / "hicolor" / "256x256" / "apps" / "fotohaus.png").exists()
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):
