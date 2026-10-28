@@ -84,8 +84,8 @@ def test_names_with_slash_are_refused():
 # ---------------------------------------------------------------- scanning never forgets unreadable folders
 
 def test_unreadable_folder_keeps_its_data():
-    if os.geteuid() == 0:
-        print("  (skipped as root: permissions are not enforced)")
+    if sys.platform == "win32" or os.geteuid() == 0:
+        print("  (skipped: folder permissions are not enforced here)")
         return
     lib, root = _lib()
     _jpg(root / "Locked" / "a.jpg")
@@ -142,7 +142,8 @@ def test_gps_write_atomic_and_keeps_mode():
     md = media.read_metadata(str(p))
     assert abs(md["lat"] - 47.5) < 1e-4 and abs(md["lon"] + 122.33) < 1e-4
     assert md["taken"] and time.localtime(md["taken"]).tm_year == 2020      # other EXIF kept
-    assert stat.S_IMODE(os.stat(p).st_mode) == 0o640
+    if sys.platform != "win32":          # Windows has no Unix permission bits
+        assert stat.S_IMODE(os.stat(p).st_mode) == 0o640
     assert not [f for f in os.listdir(p.parent) if f.endswith(".tmp")]
     # 59.9999″ must carry into the next minute, never produce 60″
     d, m, s = media._to_dms(10.99999999)
@@ -170,7 +171,8 @@ def test_caption_written_into_jpeg_keeps_mode():
     lib.set_caption(pid, "Grüße aus Aachen")
     from fotohaus import media
     assert media.read_metadata(str(p))["caption"] == "Grüße aus Aachen"
-    assert stat.S_IMODE(os.stat(p).st_mode) == 0o600
+    if sys.platform != "win32":          # Windows has no Unix permission bits
+        assert stat.S_IMODE(os.stat(p).st_mode) == 0o600
 
 
 # ---------------------------------------------------------------- video dates when 'moov' is at the end
@@ -397,6 +399,8 @@ def test_ui_click_through():
     QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Ok)
     QInputDialog.getText = staticmethod(lambda *a, **k: ("Anna", True))
     QInputDialog.getItem = staticmethod(lambda *a, **k: ("Anna", True))
+    import fotohaus.macos as _macos
+    _macos.authenticate = lambda reason="": True    # no Touch ID / Windows Hello on a test machine
     import fotohaus.ui.mainwindow as MW
     lib, root = _lib()
     for i in range(6):
@@ -427,8 +431,8 @@ def test_ui_click_through():
     for a in w.findChildren(QAction):
         for sc in a.shortcuts():
             k = sc.toString()
-            if k == "Ctrl+Y" and sys.platform != "darwin":
-                continue            # Linux also binds Redo to Ctrl+Y; on the Mac Redo is ⇧⌘Z only
+            if k == "Ctrl+Y" and app.platformName() != "cocoa":
+                continue            # Windows/Linux (and headless Qt) also bind Redo to Ctrl+Y; on the Mac Redo is ⇧⌘Z only
             if k and k in seen and seen[k] is not a:
                 raise AssertionError(f"shortcut {k} used by '{seen[k].text()}' and '{a.text()}'")
             seen[k] = a
@@ -724,5 +728,5 @@ if __name__ == "__main__":
                 traceback.print_exc()
                 print("FAIL", name)
                 failed += 1
-    sys.stdout.flush()
-    os._exit(1 if failed else 0)        # skip PySide's teardown, as the app itself does
+    from fotohaus import hard_exit
+    hard_exit(1 if failed else 0)       # skip PySide's teardown, as the app itself does

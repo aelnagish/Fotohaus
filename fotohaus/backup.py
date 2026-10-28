@@ -41,14 +41,25 @@ def _files_for(lib, bset: dict) -> list[tuple[str, str]]:
         if r["path"] in seen or r["kind"] not in kinds:
             continue
         seen.add(r["path"])
-        rel = os.path.relpath(r["path"], "/").replace(":", "_")
+        rel = _backup_rel(r["path"])
         out.append((r["path"], rel))
         folder = os.path.dirname(r["path"])
         for extra in (os.path.join(folder, ".picasa.ini"), os.path.join(folder, ".picasaoriginals", r["filename"])):
             if os.path.exists(extra) and extra not in seen:
                 seen.add(extra)
-                out.append((extra, os.path.relpath(extra, "/").replace(":", "_")))
+                out.append((extra, _backup_rel(extra)))
     return out
+
+
+def _backup_rel(path: str) -> str:
+    """Where a file goes inside the backup folder: its full path, with the drive as the first folder
+    on Windows (C:\\Photos\\a.jpg -> C/Photos/a.jpg, \\\\nas\\pics\\a.jpg -> nas_pics/a.jpg), so
+    photos on different drives can't collide. On macOS and Linux: /Users/x/a.jpg -> Users/x/a.jpg."""
+    drive, tail = os.path.splitdrive(os.path.abspath(path))
+    tail = tail.lstrip("\\/")
+    drive = drive.strip("\\/").replace(":", "").replace("\\", "_").replace("/", "_")
+    rel = os.path.join(drive, tail) if drive else tail
+    return rel.replace(":", "_")
 
 
 def run_backup(lib, bset: dict, progress=None, should_stop=None) -> dict:

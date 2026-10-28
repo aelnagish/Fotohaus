@@ -46,6 +46,14 @@ def main(argv=None) -> int:
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName(APP_NAME)
+    if sys.platform.startswith("linux"):
+        QGuiApplication.setDesktopFileName("fotohaus")   # Wayland: match fotohaus.desktop for the icon
+    if sys.platform == "win32":
+        try:   # group taskbar buttons under the Start menu shortcut's icon, not Python's
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Fotohaus.Fotohaus")
+        except Exception:
+            pass
     # One Fotohaus per library: if one is already running, give it our photos and folders and quit.
     from PySide6.QtCore import QLockFile
     from . import instance

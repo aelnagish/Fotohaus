@@ -8,7 +8,7 @@ from PySide6.QtCore import (QObject, QPointF, QRectF, QRunnable, QSize, Qt, QThr
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QToolButton, QWidget
 
-from .. import thumbs
+from .. import macos, thumbs
 from . import theme
 
 WHITE = QColor("#f0f0f0")
@@ -117,7 +117,7 @@ class Slideshow(QWidget):
         self.cap_btn.setStyleSheet("color: #ddd;")
         self.cap_btn.toggled.connect(lambda on: (setattr(self, "captions", on), self.update()))
         h.addWidget(self.cap_btn)
-        self.star_btn = btn("star-outline", "Star (⌘8)", self.toggle_star, theme.STAR)
+        self.star_btn = btn("star-outline", macos.keys("Star (⌘8)"), self.toggle_star, theme.STAR)
         btn("rotate-left", "Rotate counterclockwise", lambda: self.rotate(-1))
         btn("rotate-right", "Rotate clockwise", lambda: self.rotate(1))
         btn("close", "Exit (Esc)", self.close)

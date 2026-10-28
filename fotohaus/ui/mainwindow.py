@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         f.addAction("View in Photo Viewer", self.view_in_viewer, S("Ctrl+Y"))
         self.open_with_menu = f.addMenu("Open With")
         self.open_with_menu.aboutToShow.connect(self._fill_open_with)
-        f.addAction("Show in Finder", self.reveal_selected, S("Ctrl+Shift+R"))
+        f.addAction(macos.SHOW_IN, self.reveal_selected, S("Ctrl+Shift+R"))
         f.addSeparator()
         f.addAction("Save (Write Edits to File)", self.save_selected, S.Save)
         f.addAction("Save As…", self.save_as)
@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         f.addAction("Share…", lambda: self._tray_action("share"))
         f.addSeparator()
         f.addAction("Rename…", self.rename_selected, S("Ctrl+Shift+M"))
-        f.addAction("Move to Trash", self.trash_selected, S("Ctrl+Backspace"))
+        f.addAction(f"Move to {macos.TRASH}", self.trash_selected, S("Ctrl+Backspace"))
         f.addSeparator()
         a = f.addAction("Options…", self.open_settings, S.Preferences)
         a.setMenuRole(QAction.PreferencesRole)
@@ -351,7 +351,7 @@ class MainWindow(QMainWindow):
         fo.addAction("Remove from Fotohaus…", lambda: self._cur_folder() and self._remove_folder(self._cur_folder()))
         fo.addAction("Refresh Thumbnails", self.refresh_thumbnails)
         fo.addSeparator()
-        fo.addAction("Show in Finder", lambda: self._cur_folder() and reveal_in_finder(self.lib.folder(self._cur_folder())["path"]))
+        fo.addAction(macos.SHOW_IN, lambda: self._cur_folder() and reveal_in_finder(self.lib.folder(self._cur_folder())["path"]))
         fo.addAction("View Slideshow", lambda: self.start_slideshow(from_start=True))
         fo.addAction("Select All Pictures", self.grid.selectAll)
         fo.addAction("Export Folder…", lambda: self.export_ids([r["id"] for r in self.grid.model_.photo_rows()]))
@@ -395,7 +395,7 @@ class MainWindow(QMainWindow):
         pi.addAction("Archive / Unarchive", self.archive_selected, S("Ctrl+Shift+A"))
         pi.addAction("Move to Private / Remove from Private", self.private_selected)
         pi.addAction("Set as Desktop", self.set_desktop)
-        pi.addAction("Move to Trash", self.trash_selected)
+        pi.addAction(f"Move to {macos.TRASH}", self.trash_selected)
         # ---- Create
         cr = mb.addMenu("&Create")
         cr.addAction("Picture Collage…", self.make_collage)
@@ -406,7 +406,8 @@ class MainWindow(QMainWindow):
         cr.addAction("Create a Gift Disk Image…", self.make_gift)
         cr.addSeparator()
         cr.addAction("Set as Desktop", self.set_desktop)
-        cr.addAction("Add to Screensaver", self.add_to_screensaver)
+        if macos.HAS_SCREENSAVER_FOLDER:
+            cr.addAction("Add to Screensaver", self.add_to_screensaver)
         # ---- Tools
         t = mb.addMenu("&Tools")
         t.addAction("Folder Manager…", self.folder_manager)
@@ -636,7 +637,7 @@ class MainWindow(QMainWindow):
                                              if f["date"] else "", f["place"], f["description"]) if x)
                 self._header_btn("Play Slideshow", lambda: self.start_slideshow(from_start=True))
                 self._header_btn("Edit Description…", lambda fid=ident: self._folder_props(fid))
-                self._header_btn("Show in Finder", lambda p=f["path"]: reveal_in_finder(p))
+                self._header_btn(macos.SHOW_IN, lambda p=f["path"]: reveal_in_finder(p))
         elif kind == "album":
             a = lib.album(ident)
             rows = lib.photos_in_album(ident)
@@ -677,7 +678,7 @@ class MainWindow(QMainWindow):
                 self._header_btn("Unlock…", lambda: self._unlock_private() and self.reload_collection())
         elif kind == "deleted":
             rows, title, sections = lib.deleted_photos(), "Recently Deleted", None
-            sub = "Items are kept for 30 days, then moved to the Mac's Trash. Your files stay in place until then."
+            sub = f"Items are kept for 30 days, then moved to {macos.TRASH_PLACE}. Your files stay in place until then."
             self._header_btn("Restore All", lambda: (lib.restore_deleted([r["id"] for r in lib.deleted_photos()]),
                                                      self._refresh_all()))
             self._header_btn("Delete All Now…", lambda: self.purge_selected([r["id"] for r in lib.deleted_photos()]))
@@ -744,9 +745,9 @@ class MainWindow(QMainWindow):
 
     _EMPTY_HINTS = {
         "memories": "No memories for today.\n\nPhotos taken around this date in earlier years appear here.",
-        "archived": "Nothing archived.\n\nSelect photos and choose Picture ▸ Archive (⇧⌘A) to tuck them away.",
+        "archived": macos.keys("Nothing archived.\n\nSelect photos and choose Picture ▸ Archive (⇧⌘A) to tuck them away."),
         "private": "Nothing private yet.\n\nSelect photos and choose Picture ▸ Move to Private.\n"
-                   "They are hidden everywhere and open only with Touch ID.",
+                   f"They are hidden everywhere and open only with {macos.UNLOCK_WITH}.",
         "deleted": "Nothing recently deleted.\n\nDeleted photos stay here for 30 days so you can restore them.",
     }
 
@@ -945,9 +946,16 @@ class MainWindow(QMainWindow):
         m.addSeparator()
 
         def choose():
-            start = "/Applications" if os.path.isdir("/Applications") else str(Path.home())
-            app, _ = QFileDialog.getOpenFileName(self, "Choose an application", start, "Applications (*.app)")
-            if not app:
+            if sys.platform == "darwin":
+                start, filt = "/Applications", "Applications (*.app)"
+            elif sys.platform == "win32":
+                start, filt = os.environ.get("ProgramFiles", "C:\\Program Files"), "Programs (*.exe)"
+            else:
+                start, filt = "/usr/bin", "All files (*)"
+            if not os.path.isdir(start):
+                start = str(Path.home())
+            app, _ = QFileDialog.getOpenFileName(self, "Choose an application", start, filt)
+            if not app and sys.platform == "darwin":
                 app = QFileDialog.getExistingDirectory(self, "Choose an application", start)
             if app:
                 macos.open_with(paths, app)
@@ -979,7 +987,7 @@ class MainWindow(QMainWindow):
         if not ids:
             return
         if QMessageBox.question(self, "Delete Now",
-                                f"Move {len(ids)} item{'s' if len(ids) != 1 else ''} to the Mac's Trash now? "
+                                f"Move {len(ids)} item{'s' if len(ids) != 1 else ''} to {macos.TRASH_PLACE} now? "
                                 "They'll leave Fotohaus for good.") != QMessageBox.Yes:
             return
         self.lib.purge_deleted(ids)
@@ -1299,7 +1307,7 @@ class MainWindow(QMainWindow):
     def _delete_folder(self, fid):
         f = self.lib.folder(fid)
         if QMessageBox.question(self, "Delete Folder", f"Move the folder “{f['name']}” and everything in it to the "
-                                "Trash?") == QMessageBox.Yes:
+                                f"{macos.TRASH}?") == QMessageBox.Yes:
             fileops.delete_folder(self.lib, fid)
             self._go("all", None)
 
@@ -1417,7 +1425,7 @@ class MainWindow(QMainWindow):
         m.addAction("Adjust Date and Time…", self.adjust_dates)
         m.addAction("Move to New Folder…", self.move_to_new_folder)
         m.addAction("Locate in Folder", lambda: self.locate(ids[0]))
-        m.addAction("Show in Finder", self.reveal_selected)
+        m.addAction(macos.SHOW_IN, self.reveal_selected)
         ow = m.addMenu("Open With")
         self.open_with_menu_ctx = ow
         ow.aboutToShow.connect(lambda: self._fill_open_with_into(ow))
@@ -1463,7 +1471,7 @@ class MainWindow(QMainWindow):
                 return
             m.addAction("Play Slideshow", lambda: (self._go("folder", ident), self.start_slideshow(from_start=True)))
             m.addAction("Folder Properties…", lambda: self._folder_props(ident))
-            m.addAction("Show in Finder", lambda: reveal_in_finder(f["path"]))
+            m.addAction(macos.SHOW_IN, lambda: reveal_in_finder(f["path"]))
             m.addSeparator()
             m.addAction("Rename Folder…", lambda: self._rename_folder(ident))
             m.addAction("Move Folder…", lambda: self._move_folder(ident))
@@ -1635,7 +1643,7 @@ class MainWindow(QMainWindow):
         m.setWindowTitle(title)
         m.setText(f"{len(paths)} file{'s' if len(paths) != 1 else ''} created." if len(paths) > 1
                   else f"Created {os.path.basename(str(paths[0]))}.")
-        show = m.addButton("Show in Finder", QMessageBox.AcceptRole)
+        show = m.addButton(macos.SHOW_IN, QMessageBox.AcceptRole)
         m.addButton(QMessageBox.Ok)
         m.exec()
         if m.clickedButton() == show:
@@ -1798,8 +1806,12 @@ class MainWindow(QMainWindow):
         if not d.exec():
             return
         name, size, html = d.name.text().strip() or "Photos", d.size.currentData(), d.html.isChecked()
-        out, _ = QFileDialog.getSaveFileName(self, "Save disk image", os.path.join(default_pictures(), f"{name}.dmg"),
-                                             "Disk image (*.dmg)")
+        if macos.IS_MAC:
+            out, _ = QFileDialog.getSaveFileName(self, "Save disk image", os.path.join(default_pictures(), f"{name}.dmg"),
+                                                 "Disk image (*.dmg)")
+        else:
+            out, _ = QFileDialog.getSaveFileName(self, "Save gift file", os.path.join(default_pictures(), f"{name}.zip"),
+                                                 "Zip file (*.zip)")
         if not out:
             return
         from ..exporter import ExportOptions, export_html, export_photo

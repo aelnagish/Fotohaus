@@ -73,6 +73,46 @@ Drag Fotohaus from Applications to the Trash. To remove its library too, delete
 affected. (Picasa-style `.picasa.ini` files Fotohaus wrote next to your photos are harmless and can
 stay.)
 
+## Windows
+
+Fotohaus runs on 64-bit Windows 10 and 11.
+
+1. Download `Fotohaus-<version>-Setup.exe` from [Releases](../../releases) and open it.
+2. Until the installer is code-signed, Windows shows **"Windows protected your PC"** the first
+   time. Click **More info**, then **Run anyway**.
+3. The installer needs no administrator rights: it installs for you alone, or for everyone on the
+   PC if you choose that. It adds Fotohaus to the Start menu and to *Open with* for photos and videos.
+
+To make Fotohaus open photos when you double-click them, use *Tools ▸ Options ▸ Photo Viewer ▸
+Open Default Apps Settings*, or right-click a photo, choose *Open with ▸ Choose another app*,
+pick Fotohaus and tick *Always*.
+
+- Library database: `%LOCALAPPDATA%\Fotohaus` (kept when you uninstall)
+- Startup problems are logged to `%LOCALAPPDATA%\Fotohaus\Fotohaus.log`
+- Command line and MCP: `fotohaus-cli.exe` in the install folder, for example
+  `"%LOCALAPPDATA%\Programs\Fotohaus\fotohaus-cli.exe" mcp`
+- Uninstall: *Settings ▸ Apps ▸ Installed apps ▸ Fotohaus ▸ Uninstall*
+
+## Linux
+
+Fotohaus runs on 64-bit Linux desktops from roughly 2019 on (glibc 2.28 or newer: Ubuntu 20.04,
+Debian 10, Fedora 29 and later).
+
+1. Download `Fotohaus-<version>-x86_64.AppImage` from [Releases](../../releases).
+2. Make it executable: right-click ▸ *Properties* ▸ *Allow executing as program*, or
+   `chmod +x Fotohaus-*.AppImage`.
+3. Double-click it. To add it to your applications menu and make it the default photo viewer, use
+   *Tools ▸ Options ▸ Photo Viewer ▸ Make Fotohaus the Default*.
+
+- Library database: `~/.local/share/fotohaus`; thumbnails in `~/.cache/fotohaus`
+- Command line and MCP: run the AppImage with a command, for example
+  `./Fotohaus-<version>-x86_64.AppImage search "beach 2019"` or `… mcp`
+- Uninstall: delete the AppImage, and `~/.local/share/applications/fotohaus.desktop` if you added
+  it to the menu
+- If it doesn't start, run it from a terminal to see why. Without FUSE (some containers and
+  minimal systems), start it with `--appimage-extract-and-run`; a missing `libxkbcommon-x11` or
+  `libxcb-*` library is fixed by installing that package.
+
 ## License
 
 Fotohaus is free software under the GNU GPL, version 3 or later, and comes with no warranty.
