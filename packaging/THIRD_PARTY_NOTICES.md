@@ -39,7 +39,7 @@ SVT-AV1, libaom, libwebp, OpenEXR) are under permissive or LGPL licenses; their 
 - **Fotohaus:** https://github.com/aelnagish/fotohaus (each release has the matching source).
 - **GPL components** (FFmpeg 7.1.1 and 9.0.2, x264 and x265 at the exact revisions above, and the
   build scripts used for the OpenCV and PyAV wheels): the archive
-  `fotohaus-1.0.0-gpl-sources.tar` attached to the same GitHub release as the app.
+  `fotohaus-1.0.1-gpl-sources.tar` attached to the same GitHub release as the app.
 - **LGPL components** (Qt, PySide6, FFmpeg in Qt Multimedia, libheif, libde265, LibRaw):
   https://download.qt.io, https://ffmpeg.org, https://github.com/strukturag/libheif,
   https://github.com/strukturag/libde265, https://www.libraw.org. These libraries are dynamically

@@ -16,7 +16,7 @@ remove with `brew uninstall --cask fotohaus` (add `--zap` to also remove the lib
 
 ### From the disk image
 
-1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases).
+1. Download `Fotohaus-1.0.1-arm64.dmg` from [Releases](../../releases).
 2. Open the disk image and drag **Fotohaus** into the **Applications** folder.
 
 ## First launch

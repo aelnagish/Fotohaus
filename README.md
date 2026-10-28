@@ -164,7 +164,7 @@ brew install --cask aelnagish/tap/fotohaus
 
 **Or download it yourself:**
 
-1. Download `Fotohaus-1.0.0-arm64.dmg` from [Releases](../../releases).
+1. Download `Fotohaus-1.0.1-arm64.dmg` from [Releases](../../releases).
 2. Open the disk image and drag **Fotohaus** into **Applications**.
 3. Open Fotohaus. It isn't notarized by Apple yet, so macOS blocks it the first time:
    - If macOS says it **"is damaged and can't be opened"**, click *Cancel*, then run this once in
@@ -210,7 +210,7 @@ or not, you must pass on the same freedoms and the source code. Copyright © 202
 The app bundles third-party components under their own licenses, listed in
 [`packaging/THIRD_PARTY_NOTICES.md`](packaging/THIRD_PARTY_NOTICES.md). The source code of the
 GPL libraries inside the app (FFmpeg, x264, x265) is attached to each release as
-`fotohaus-1.0.0-gpl-sources.tar`.
+`fotohaus-1.0.1-gpl-sources.tar`.
 
 <sub>Screenshots use freely licensed sample images from the scikit-image, imageio and Pillow
 projects. Fotohaus is an independent project.</sub>

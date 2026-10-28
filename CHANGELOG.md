@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 — 2026-10-28
 
 - Photo Viewer: the mouse wheel now zooms in and out around the pointer with every mouse,
   including smooth-scrolling mice and the Magic Mouse; zooming out past the whole photo settles
