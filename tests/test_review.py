@@ -728,5 +728,5 @@ if __name__ == "__main__":
                 traceback.print_exc()
                 print("FAIL", name)
                 failed += 1
-    sys.stdout.flush()
-    os._exit(1 if failed else 0)        # skip PySide's teardown, as the app itself does
+    from fotohaus import hard_exit
+    hard_exit(1 if failed else 0)       # skip PySide's teardown, as the app itself does
