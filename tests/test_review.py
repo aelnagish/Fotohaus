@@ -431,8 +431,8 @@ def test_ui_click_through():
     for a in w.findChildren(QAction):
         for sc in a.shortcuts():
             k = sc.toString()
-            if k == "Ctrl+Y" and sys.platform != "darwin":
-                continue            # Linux also binds Redo to Ctrl+Y; on the Mac Redo is ⇧⌘Z only
+            if k == "Ctrl+Y" and app.platformName() != "cocoa":
+                continue            # Windows/Linux (and headless Qt) also bind Redo to Ctrl+Y; on the Mac Redo is ⇧⌘Z only
             if k and k in seen and seen[k] is not a:
                 raise AssertionError(f"shortcut {k} used by '{seen[k].text()}' and '{a.text()}'")
             seen[k] = a
