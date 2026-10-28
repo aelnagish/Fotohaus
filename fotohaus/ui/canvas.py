@@ -5,6 +5,8 @@ from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
+from . import pointer
+
 ASPECTS = {"Free": None, "Original": "orig", "Square": 1.0, "4 × 6": 6 / 4, "5 × 7": 7 / 5, "8 × 10": 10 / 8,
            "16 × 9": 16 / 9, "3 × 2": 3 / 2, "4 × 3": 4 / 3}
 
@@ -326,15 +328,18 @@ class ImageCanvas(QWidget):
     def wheelEvent(self, e):
         if self.img is None:
             return
-        zoom_key = bool(e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier))
-        if not zoom_key and not self.zoom_fit and not e.pixelDelta().isNull():
-            # two-finger scroll on a trackpad pans a zoomed photo (a mouse wheel still zooms)
-            self.offset += QPointF(e.pixelDelta())
-            self.update()
-        elif zoom_key or not self.zoom_fit:
-            self._zoom_by(1.0015 ** e.angleDelta().y())
-        else:
-            super().wheelEvent(e)
+        if pointer.is_trackpad_scroll(e) and not pointer.zoom_key(e):
+            # two-finger scroll on a trackpad pans a zoomed photo (pinch zooms)
+            if self.zoom_fit:
+                super().wheelEvent(e)
+            else:
+                self.offset += QPointF(e.pixelDelta())
+                self.update()
+            return
+        # a mouse wheel (or Cmd/Ctrl + scroll) zooms
+        dy = pointer.wheel_steps(e)
+        if dy:
+            self._zoom_by(1.0015 ** dy)
 
     def event(self, e):
         # pinch to zoom on a trackpad

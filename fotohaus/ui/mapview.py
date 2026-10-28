@@ -10,7 +10,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetwork
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from ..paths import TILE_DIR
-from . import theme
+from . import pointer, theme
 
 TILE = 256
 UA = b"Fotohaus/1.0 (desktop photo organizer)"
@@ -232,7 +232,7 @@ class MapWidget(QWidget):
         self._drag = None
 
     def wheelEvent(self, e):
-        if not e.pixelDelta().isNull() and not (e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier)):
+        if pointer.is_trackpad_scroll(e) and not pointer.zoom_key(e):
             # trackpad: two-finger scroll pans the map (pinch zooms, see event())
             d = e.pixelDelta()
             cx, cy = lonlat_to_world(*self.center, self.z)
@@ -240,7 +240,7 @@ class MapWidget(QWidget):
             self.update()
             return
         # mouse wheels send 120 per notch; smooth wheels send small steps that add up
-        self._wheel_acc = getattr(self, "_wheel_acc", 0.0) + e.angleDelta().y() / 120.0
+        self._wheel_acc = getattr(self, "_wheel_acc", 0.0) + pointer.wheel_steps(e) / 120.0
         if abs(self._wheel_acc) < 0.5:
             return
         steps, self._wheel_acc = self._wheel_acc, 0.0

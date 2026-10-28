@@ -660,6 +660,58 @@ def test_ui_click_through():
     print(f"  clicked through {len(opened)} dialogs and every view")
 
 
+def test_viewer_mouse_wheel_zooms():
+    """A mouse wheel zooms the Photo Viewer even when the mouse also reports pixel deltas (as most
+    mice on macOS do); two-finger trackpad scrolling still pans instead."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QImage, QInputDevice, QPointingDevice, QWheelEvent
+    from PySide6.QtWidgets import QApplication
+    from fotohaus.ui import pointer
+    from fotohaus.ui.viewer import PhotoViewer
+    app = QApplication.instance() or QApplication([])
+    lib, root = _lib()
+    _jpg(root / "a.jpg", 1600, 1200)
+    v = PhotoViewer(lib, str(root / "a.jpg"))
+    v.resize(1200, 900)
+    v.img, v.orig_size = QImage(1600, 1200, QImage.Format_RGB32), (1600, 1200)
+    mouse = QPointingDevice.primaryPointingDevice()
+    pad = QPointingDevice("test trackpad", 99, QInputDevice.DeviceType.TouchPad,
+                          QPointingDevice.PointerType.Finger, QInputDevice.Capability.Position, 5, 0)
+
+    def wheel(dev, angle, pixels=QPoint(), phase=Qt.ScrollPhase.NoScrollPhase):
+        c = QPointF(600, 400)
+        return QWheelEvent(c, c, pixels, QPoint(0, angle), Qt.NoButton, Qt.NoModifier, phase, False,
+                           Qt.MouseEventNotSynthesized, dev)
+
+    fit_w = v.image_rect().width()
+    # plain notched wheel
+    v.wheelEvent(wheel(mouse, 120))
+    assert not v.zoom_fit and v.image_rect().width() > fit_w * 1.1
+    v.fit()
+    # smooth-scrolling mouse: pixel deltas too, but no scroll phase -> still zooms
+    e = wheel(mouse, 120, QPoint(0, 12))
+    assert not pointer.is_trackpad_scroll(e)
+    v.wheelEvent(e)
+    assert not v.zoom_fit
+    # zooming back out past "fit" settles on fit, centred
+    for _ in range(10):
+        v.wheelEvent(wheel(mouse, -120))
+    assert v.zoom_fit and v.offset == QPointF(0, 0)
+    # trackpad two-finger scroll does not zoom; once zoomed it pans
+    e = wheel(pad, 30, QPoint(0, 15), Qt.ScrollPhase.ScrollUpdate)
+    assert pointer.is_trackpad_scroll(e)
+    v.wheelEvent(e)
+    assert v.zoom_fit
+    v.zoom_by(2.0)
+    before = QPointF(v.offset)
+    v.wheelEvent(wheel(pad, 30, QPoint(0, 15), Qt.ScrollPhase.ScrollUpdate))
+    assert v.offset.y() == before.y() + 15
+    # a gesture surface that only reports its scroll phase counts as a trackpad too
+    assert pointer.is_trackpad_scroll(wheel(mouse, 30, QPoint(0, 15), Qt.ScrollPhase.ScrollUpdate))
+    v._stop_media() if hasattr(v, "_stop_media") else None
+    v.deleteLater()
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):

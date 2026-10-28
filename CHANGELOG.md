@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Photo Viewer: the mouse wheel now zooms in and out around the pointer with every mouse,
+  including smooth-scrolling mice and the Magic Mouse; zooming out past the whole photo settles
+  back on "fit". Two-finger trackpad scrolling still pans a zoomed photo and pinch still zooms
+- The same mouse-or-trackpad detection is used in the editor and the Places map
+
 ## 1.0.0 — 2026-10-20
 
 First public release.

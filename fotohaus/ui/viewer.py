@@ -14,7 +14,7 @@ from PySide6.QtGui import QColor, QGuiApplication, QImage, QKeySequence, QMovie,
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton, QWidget
 
 from .. import media, thumbs
-from . import theme
+from . import pointer, theme
 
 WHITE = QColor("#f2f2f2")
 
@@ -482,13 +482,16 @@ class PhotoViewer(QWidget):
         if self.img.isNull():
             return QRectF()
         iw, ih = self.img.width(), self.img.height()
-        W, H = self.width() * 0.92, (self.height() - 90) * 0.96
-        cap = (self.orig_size[0] / iw) / self.dpr if self.orig_size else 1e9   # never beyond 100%
-        fit = min(W / iw, H / ih, cap)
-        s = fit if self.zoom_fit else self.zoom
+        s = self._fit_scale() if self.zoom_fit else self.zoom
         r = QRectF(0, 0, iw * s, ih * s)
         r.moveCenter(QPointF(self.width() / 2, (self.height() - 70) / 2) + self.offset)
         return r
+
+    def _fit_scale(self) -> float:
+        iw, ih = self.img.width(), self.img.height()
+        W, H = self.width() * 0.92, (self.height() - 90) * 0.96
+        cap = (self.orig_size[0] / iw) / self.dpr if self.orig_size else 1e9   # never beyond 100%
+        return min(W / iw, H / ih, cap)
 
     def _ensure_full(self):
         if not self.full_loaded and self.row is not None and self.row["kind"] != "video":
@@ -501,6 +504,10 @@ class PhotoViewer(QWidget):
         r = self.image_rect()
         cur = r.width() / max(1, self.img.width())
         new = max(0.02, min(16.0, cur * f))
+        if f < 1 and new <= self._fit_scale() * 1.001:
+            # zooming out past "fit" settles back on the whole photo, centred, like Picasa
+            self.fit()
+            return
         k = new / cur
         if anchor is not None:
             # keep the image point under the cursor fixed
@@ -619,16 +626,18 @@ class PhotoViewer(QWidget):
             self.toggle_zoom()
 
     def wheelEvent(self, e):
-        if not e.pixelDelta().isNull() and not (e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier)):
+        if self.video is not None:
+            return
+        if pointer.is_trackpad_scroll(e) and not pointer.zoom_key(e):
             # trackpad: two-finger scroll pans a zoomed photo (pinch zooms, see event())
             if not self.zoom_fit:
                 self.offset += QPointF(e.pixelDelta())
                 self.update()
             return
-        dy = e.angleDelta().y()
-        if not dy:
-            return
-        self.zoom_by(1.0015 ** dy, e.position())
+        # mouse wheel (or Cmd/Ctrl + scroll): zoom around the pointer
+        dy = pointer.wheel_steps(e)
+        if dy:
+            self.zoom_by(1.0015 ** dy, e.position())
 
     def event(self, e):
         if e.type() == QEvent.NativeGesture and e.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
