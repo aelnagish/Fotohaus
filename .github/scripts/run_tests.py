@@ -27,8 +27,13 @@ def main() -> int:
     test = sys.argv[1]
     minutes = float(sys.argv[2]) if len(sys.argv) > 2 else 25
     log = tempfile.NamedTemporaryFile("w+", suffix=".log", delete=False, encoding="utf-8")
-    p = subprocess.Popen([sys.executable, "-u", test], stdout=log, stderr=subprocess.STDOUT,
-                         stdin=subprocess.DEVNULL)
+    # shortly before the deadline, the test process prints every thread's stack (faulthandler),
+    # which shows where it is stuck
+    boot = ("import faulthandler, runpy, sys; "
+            f"faulthandler.dump_traceback_later({max(30, minutes * 60 - 90):.0f}, exit=False); "
+            f"sys.argv = [{test!r}]; runpy.run_path({test!r}, run_name='__main__')")
+    p = subprocess.Popen([sys.executable, "-u", "-X", "faulthandler", "-c", boot], stdout=log,
+                         stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
     shown = 0
     deadline = time.time() + minutes * 60
     last_output = time.time()
