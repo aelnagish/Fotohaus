@@ -40,8 +40,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
       - run: pip install -r requirements.txt -r requirements-dev.txt -c packaging/constraints.txt
-      - run: python tests/test_fotohaus.py
-      - run: python tests/test_review.py
+      - run: python .github/scripts/run_tests.py tests/test_fotohaus.py
+      - run: python .github/scripts/run_tests.py tests/test_review.py
 
   linux:
     name: Linux AppImage
