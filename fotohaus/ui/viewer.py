@@ -37,6 +37,18 @@ def folder_items(path: str) -> list[str]:
     return [os.path.join(folder, n) for n in names]
 
 
+def _items_around(path: str) -> tuple[list[str], int]:
+    """The pictures in path's folder and path's position among them. Matching ignores case where
+    the file system does (Windows), so "IMG_1.JPG" given by Explorer finds "img_1.jpg"."""
+    p = os.path.abspath(path)
+    items = folder_items(p)
+    key = os.path.normcase(p)
+    for k, q in enumerate(items):
+        if os.path.normcase(q) == key:
+            return items, k
+    return [p] + items, 0
+
+
 def live_partner(path: str) -> str | None:
     """The .mov of an iPhone Live Photo saved next to the still (IMG_1234.HEIC + IMG_1234.MOV)."""
     if media.kind_of(path) != "photo":
@@ -115,11 +127,7 @@ class PhotoViewer(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowTitle("Fotohaus Photo Viewer")
         self.setMouseTracking(True)
-        self.items = folder_items(path)
-        p = os.path.abspath(path)
-        if p not in self.items:
-            self.items.insert(0, p)
-        self.i = self.items.index(p)
+        self.items, self.i = _items_around(path)
         self.row = None
         self.img = QImage()
         self.full_loaded = False
@@ -192,7 +200,7 @@ class PhotoViewer(QWidget):
         self.bar.adjustSize()
 
     def _build_strip(self):
-        from PySide6.QtWidgets import QListView, QListWidget, QListWidgetItem
+        from PySide6.QtWidgets import QListView, QListWidget
         self.strip = QListWidget(self)
         self.strip.setViewMode(QListView.IconMode)
         self.strip.setFlow(QListView.LeftToRight)
@@ -204,13 +212,35 @@ class PhotoViewer(QWidget):
         self.strip.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.strip.setStyleSheet("QListWidget { background: rgba(20,20,22,170); border-radius: 10px; }"
                                  "QListWidget::item:selected { background: rgba(47,125,225,160); border-radius: 6px; }")
+        self._fill_strip()
+        self.strip.itemClicked.connect(lambda it: self.show_item(self.items.index(it.data(Qt.UserRole)))
+                                       if it.data(Qt.UserRole) in self.items else None)
+
+    def _fill_strip(self):
+        from PySide6.QtWidgets import QListWidgetItem
+        self.strip.clear()
         for p in self.items:
             it = QListWidgetItem()
             it.setToolTip(os.path.basename(p))
             it.setData(Qt.UserRole, p)
+            icon = self.strip_icons.get(p)
+            if icon is not None:
+                it.setIcon(icon)
             self.strip.addItem(it)
-        self.strip.itemClicked.connect(lambda it: self.show_item(self.items.index(it.data(Qt.UserRole)))
-                                       if it.data(Qt.UserRole) in self.items else None)
+
+    def open_path(self, path: str) -> None:
+        """Show another photo in this viewer: used when a file is opened from Finder / Explorer while
+        the viewer is already up and "Show the new photo in the open viewer" is chosen in Options.
+        The filmstrip and the arrow keys switch to the new photo's folder."""
+        items, i = _items_around(path)
+        if items != self.items:
+            self.items = items
+            self._fill_strip()
+        self.show_item(i)
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _strip_window(self):
         """Load thumbnails for the strip around the current picture."""

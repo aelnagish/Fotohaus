@@ -421,6 +421,76 @@ def test_memories_archive_private_deleted_stacks_places():
     assert [r["filename"] for r in search(lib, "tag:Trips/2024", semantic=False)] == ["live.jpg"]
 
 
+def test_private_password():
+    from fotohaus import macos
+    from fotohaus.paths import Settings
+    st = Settings(Path(tempfile.mkdtemp()) / "settings.json")
+    assert not macos.private_password_set(st)
+    assert not macos.check_private_password(st, "anything")
+    macos.set_private_password(st, "saffron")
+    assert macos.private_password_set(st)
+    assert macos.check_private_password(st, "saffron")
+    assert not macos.check_private_password(st, "Saffron") and not macos.check_private_password(st, "")
+    assert "saffron" not in json.dumps(st.get("private_password"))     # only a salted hash is kept
+    # off macOS/Windows a refused password keeps Private shut (it used to open without asking)
+    if sys.platform not in ("darwin", "win32"):
+        saved = macos._password_prompt
+        macos._password_prompt = lambda reason: False
+        try:
+            assert macos.authenticate("show your private photos") is False
+        finally:
+            macos._password_prompt = saved
+
+
+def test_single_instance_and_viewer_reuse():
+    """A second launch hands its photo to the running Fotohaus; the open viewer shows it (or a new
+    viewer opens when that option is off)."""
+    import time
+    home = tempfile.mkdtemp(prefix="fotohaus-instance-")
+    pics = Path(tempfile.mkdtemp(prefix="fotohaus-pics-"))
+    a, b = pics / "a.jpg", pics / "b.jpg"
+    _img(seed=3).save(a)
+    _img(seed=4).save(b)
+
+    def run(reuse: bool) -> str:
+        data = Path(home) / ("reuse" if reuse else "new") / "data"
+        data.mkdir(parents=True)
+        (data / "settings.json").write_text(json.dumps({"viewer_reuse": reuse, "first_run_done": True}))
+        env = dict(os.environ, FOTOHAUS_HOME=str(data.parent), QT_QPA_PLATFORM="offscreen",
+                   FOTOHAUS_AUTOQUIT_MS="9000")
+        first = subprocess.Popen([sys.executable, "-m", "fotohaus", str(a)], cwd=ROOT, env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        time.sleep(4)                                   # let the first copy start listening
+        env2 = dict(env)
+        env2.pop("FOTOHAUS_AUTOQUIT_MS")
+        t = time.time()
+        second = subprocess.run([sys.executable, "-m", "fotohaus", str(b)], cwd=ROOT, env=env2,
+                                capture_output=True, text=True, timeout=30)
+        assert second.returncode == 0, second.stderr
+        assert time.time() - t < 15                     # handed over and quit, did not open a window
+        out, _ = first.communicate(timeout=60)
+        return out
+
+    out = run(reuse=True)
+    assert "FOTOHAUS_AUTOQUIT ok: viewers=1 " in out, out
+    out = run(reuse=False)
+    assert "FOTOHAUS_AUTOQUIT ok: viewers=2 " in out, out
+
+
+def test_items_around_ignores_case_where_the_os_does():
+    from fotohaus.ui.viewer import _items_around
+    d = Path(tempfile.mkdtemp())
+    for n in ("img_1.jpg", "img_2.jpg", "img_10.jpg"):
+        _img(32, 24).save(d / n)
+    items, i = _items_around(str(d / "img_2.jpg"))
+    assert [os.path.basename(p) for p in items] == ["img_1.jpg", "img_2.jpg", "img_10.jpg"] and i == 1
+    items, i = _items_around(str(d / "IMG_2.JPG"))
+    if os.path.normcase("A") == "a":                    # Windows: same file, found in the folder
+        assert len(items) == 3 and i == 1
+    else:                                               # case-sensitive: a different (missing) name
+        assert i == 0 and len(items) == 4
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):

@@ -20,7 +20,12 @@ def _base_dirs() -> tuple[Path, Path]:
     if sys.platform == "darwin":
         return (home / "Library" / "Application Support" / APP_NAME,
                 home / "Library" / "Caches" / APP_NAME)
-    data = Path(os.environ.get("XDG_DATA_HOME", home / ".local" / "share")) / APP_NAME.lower()
+    if sys.platform == "win32":
+        # Local (not Roaming) AppData, like Picasa: the database and thumbnails grow large and the
+        # photo paths they hold only make sense on this PC.
+        local = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        return local / APP_NAME, local / APP_NAME / "Cache"
+    data =Path(os.environ.get("XDG_DATA_HOME", home / ".local" / "share")) / APP_NAME.lower()
     cache = Path(os.environ.get("XDG_CACHE_HOME", home / ".cache")) / APP_NAME.lower()
     return data, cache
 
@@ -90,6 +95,7 @@ DEFAULT_SETTINGS = {
     "first_run_done": False,
     "export_dir": "",
     "open_files_in": "viewer",       # viewer | editor  (double-clicked files from Finder)
+    "viewer_reuse": True,            # a file opened while a viewer is up replaces its photo (else: new window)
     "write_meta_in_files": True,     # store captions & tags inside JPEGs (IPTC/XMP), like Picasa
     "write_faces_in_files": False,   # store name tags inside JPEGs as XMP face regions
     "thumb_caption": "none",         # none | filename | caption | resolution | date | tags
