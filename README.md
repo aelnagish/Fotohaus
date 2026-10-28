@@ -162,14 +162,23 @@ Fotohaus runs on Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.
 brew install --cask aelnagish/tap/fotohaus
 ```
 
+> [!IMPORTANT]
+> **macOS says "Fotohaus is damaged and can't be opened"?** Click **Cancel**, not *Move to Trash*.
+> Nothing is wrong with the app: macOS says this about every app from the internet that Apple
+> hasn't notarized yet. Open **Terminal** (⌘ Space, type *Terminal*, press Return), run this once,
+> then open Fotohaus again:
+>
+> ```bash
+> xattr -cr /Applications/Fotohaus.app
+> ```
+
 **Or download it yourself:**
 
 1. Download `Fotohaus-1.0.1-arm64.dmg` from [Releases](../../releases).
 2. Open the disk image and drag **Fotohaus** into **Applications**.
 3. Open Fotohaus. It isn't notarized by Apple yet, so macOS blocks it the first time:
-   - If macOS says it **"is damaged and can't be opened"**, click *Cancel*, then run this once in
-     Terminal: `xattr -cr /Applications/Fotohaus.app`. Nothing is wrong with the app; this is how
-     macOS treats apps from the internet that aren't notarized.
+   - If macOS says it **"is damaged and can't be opened"**, click *Cancel* and run the one-line
+     fix in the box above.
    - If it says it **"could not verify"** Fotohaus, open *System Settings ▸ Privacy & Security*,
      scroll down and click **Open Anyway** next to the message about Fotohaus.
 4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Options ▸ Photo Viewer*.

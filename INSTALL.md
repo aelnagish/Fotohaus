@@ -23,8 +23,10 @@ remove with `brew uninstall --cask fotohaus` (add `--zap` to also remove the lib
 
 This build is not notarized by Apple yet, so macOS blocks it the first time.
 
-**If macOS says Fotohaus "is damaged and can't be opened":** nothing is wrong with the app.
-macOS says this about apps downloaded from the internet that aren't notarized.
+> [!IMPORTANT]
+> **If macOS says Fotohaus "is damaged and can't be opened": click Cancel, not Move to Trash.**
+> Nothing is wrong with the app. macOS says this about apps downloaded from the internet that
+> aren't notarized. The fix takes ten seconds:
 
 1. Click **Cancel** (not *Move to Trash*).
 2. Open **Terminal** (press ⌘Space, type *Terminal*, press Return) and run:
