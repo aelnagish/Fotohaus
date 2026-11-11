@@ -79,7 +79,7 @@ class Slideshow(QWidget):
         self.bar = QWidget(self)
         self.bar.setObjectName("SSBar")
         self.bar.setStyleSheet("#SSBar { background: rgba(20,20,22,215); border-radius: 14px; }"
-                               "QLabel { color: #ddd; } QToolButton { border: none; padding: 6px; border-radius: 6px; }"
+                               "QLabel { color: #ddd; } QToolButton { border: none; background: transparent; padding: 6px; border-radius: 6px; }"
                                "QToolButton:hover { background: rgba(255,255,255,40); }"
                                "QComboBox { color: #eee; background: rgba(255,255,255,30); border: 1px solid "
                                "rgba(255,255,255,60); border-radius: 6px; padding: 3px 8px; }"

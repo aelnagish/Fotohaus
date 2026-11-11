@@ -264,6 +264,11 @@ def stylesheet() -> str:
                         border: 1px solid {border}; background: {grid_bg}; }}
     QPushButton#Effect {{ text-align: left; padding: 6px 10px; }}
     QToolButton {{ padding: 4px 6px; }}
+    QPushButton#Effect, QToolButton {{ border: 1px solid {border}; border-radius: 6px; background: {card_bg}; }}
+    QPushButton#Effect:hover, QToolButton:hover {{ background: {chip_bg}; }}
+    QPushButton#Effect:pressed, QToolButton:pressed {{ background: {border}; }}
+    QToolButton:checked {{ background: {person_bg}; border-color: {ACCENT.name()}; }}
+    QPushButton#Effect:disabled, QToolButton:disabled {{ color: {sec}; }}
     QTabWidget#EditTabs::pane {{ border: none; }}
     """
 
@@ -386,6 +391,13 @@ def _draw(name: str, p: QPainter, s: float, color: QColor) -> None:
         p.drawRoundedRect(QRectF(r.left(), r.top() + s * 0.1, r.width(), r.height() - s * 0.2), s * 0.04, s * 0.04)
         p.drawLine(QPointF(r.left(), r.top() + s * 0.12), QPointF(c.x(), c.y() + s * 0.04))
         p.drawLine(QPointF(r.right(), r.top() + s * 0.12), QPointF(c.x(), c.y() + s * 0.04))
+    elif name == "coffee":
+        cup = QRectF(r.left(), c.y() - s * 0.08, r.width() * 0.72, r.height() * 0.5)
+        p.drawRoundedRect(cup, s * 0.07, s * 0.07)
+        p.drawArc(QRectF(cup.right() - s * 0.1, cup.top() + s * 0.05, s * 0.24, cup.height() * 0.55), -90 * 16, 180 * 16)
+        for dx in (-0.1, 0.06):
+            x = cup.center().x() + s * dx
+            p.drawLine(QPointF(x, r.top()), QPointF(x, r.top() + s * 0.13))
     elif name == "print":
         p.drawRect(QRectF(r.left() + s * 0.15, r.top(), r.width() - s * 0.3, s * 0.2))
         p.drawRoundedRect(QRectF(r.left(), r.top() + s * 0.2, r.width(), r.height() * 0.45), s * 0.04, s * 0.04)

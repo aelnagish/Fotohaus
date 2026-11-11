@@ -124,7 +124,7 @@ class _Button(QToolButton):
         self.setAutoRaise(True)
         self.setCursor(Qt.PointingHandCursor)
         self.clicked.connect(cb)
-        self.setStyleSheet("QToolButton { border: none; padding: 6px; border-radius: 6px; }"
+        self.setStyleSheet("QToolButton { border: none; background: transparent; padding: 6px; border-radius: 6px; }"
                            "QToolButton:hover { background: rgba(255,255,255,40); }")
 
 

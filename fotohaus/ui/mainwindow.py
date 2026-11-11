@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDia
                                QMenu, QMessageBox, QSizePolicy, QSlider, QSplitter, QStackedWidget, QToolBar,
                                QToolButton, QVBoxLayout, QWidget)
 
-from .. import APP_NAME, SUPPORT_URL, __version__, fileops, macos
+from .. import APP_NAME, FEEDBACK_EMAIL, SUPPORT_URL, __version__, fileops, macos
 from ..ai import clip
 from ..ai.indexer import Indexer
 from ..picasa.ini import Filter
@@ -141,6 +141,10 @@ class MainWindow(QMainWindow):
         self.act_info.setCheckable(True)
         self.act_info.setChecked(True)
         self.act_info.toggled.connect(lambda on: self.panel.setVisible(on))
+        fb = tb.addAction(theme.icon("mail"), "Feedback", self.send_feedback)
+        fb.setToolTip("Send feedback by email")
+        cf = tb.addAction(theme.icon("coffee"), "Coffee", self.buy_coffee)
+        cf.setToolTip("Buy me a coffee")
 
         self.sidebar = Sidebar(self.lib)
         self.sidebar.selected.connect(self._sidebar_selected)
@@ -431,7 +435,8 @@ class MainWindow(QMainWindow):
         h.addAction("Search Tips", self.search_help)
         h.addAction("Picasa Compatibility", self.compat_help)
         h.addSeparator()
-        h.addAction("☕ Buy Me a Coffee…", lambda: QDesktopServices.openUrl(QUrl(SUPPORT_URL)))
+        h.addAction("Send Feedback…", self.send_feedback)
+        h.addAction("☕ Buy Me a Coffee…", self.buy_coffee)
         ab = h.addAction(f"About {APP_NAME}", self.about)
         ab.setMenuRole(QAction.AboutRole)
 
@@ -1959,6 +1964,16 @@ class MainWindow(QMainWindow):
             "• Picasa's contacts.xml (name tags) can be imported from Options ▸ Name Tags & Metadata.\n\n"
             "Picasa Web Albums, Google+ sharing, Blogger and print ordering were Google services that no longer "
             "exist; Fotohaus offers the macOS Share menu, Email, web-page export and printing instead."))
+
+    def send_feedback(self):
+        from urllib.parse import quote
+        import platform
+        body = f"\n\n\n{APP_NAME} {__version__} on {platform.system()} {platform.release()} ({platform.machine()})"
+        QDesktopServices.openUrl(QUrl(f"mailto:{FEEDBACK_EMAIL}?subject={quote(APP_NAME + ' feedback')}"
+                                      f"&body={quote(body)}"))
+
+    def buy_coffee(self):
+        QDesktopServices.openUrl(QUrl(SUPPORT_URL))
 
     def about(self):
         QMessageBox.about(self, f"About {APP_NAME}", (
