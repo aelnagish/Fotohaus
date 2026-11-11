@@ -20,9 +20,10 @@ def fmt_date(ts) -> str:
     if not ts:
         return ""
     try:
-        return _dt.datetime.fromtimestamp(ts).strftime("%b %-d, %Y")
-    except (ValueError, OSError):
-        return _dt.datetime.fromtimestamp(ts).strftime("%b %d, %Y")
+        d = _dt.datetime.fromtimestamp(ts)
+    except (ValueError, OSError, OverflowError):
+        return ""
+    return f"{d:%b} {d.day}, {d.year}"      # not %-d: Windows doesn't know it
 
 
 def fmt_duration(sec) -> str:
@@ -70,7 +71,7 @@ class PhotoGridModel(QAbstractListModel):
                     ago = _dt.date.today().year - d.year
                     key = d.year
                     hdr = {"key": key, "title": f"{ago} year{'s' if ago != 1 else ''} ago", "date": None,
-                           "subtitle": d.strftime("%B %-d, %Y") if hasattr(d, "strftime") else ""}
+                           "subtitle": f"{d:%B} {d.day}, {d.year}"}
                 else:
                     d = _dt.datetime.fromtimestamp(r["taken"] or 0)
                     key = (d.year, d.month)
