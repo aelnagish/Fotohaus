@@ -203,14 +203,20 @@ footer a{color:var(--mist)}
       <h1>Every photo you’ve taken, at home on your computer.</h1>
       <p class="lede">Fotohaus sorts the folders you already have into a library you can search, edit and enjoy. Nothing is uploaded and nothing is moved.</p>
       <div class="ctas">
-        <a class="btn btn-main" href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.3/Fotohaus-1.0.3-arm64.dmg">
+        <a class="btn btn-main" data-os="mac" href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.3/Fotohaus-1.0.3-arm64.dmg">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
           Download for Mac
         </a>
-        <a class="btn btn-ghost" href="https://github.com/aelnagish/fotohaus">Source on GitHub</a>
+        <a class="btn btn-ghost" data-os="win" href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.3/Fotohaus-1.0.3-Setup.exe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          Windows
+        </a>
+        <a class="btn btn-ghost" data-os="linux" href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.3/Fotohaus-1.0.3-x86_64.AppImage">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          Linux
+        </a>
       </div>
-      <p class="req">Version 1.0.3 · free · Apple silicon, macOS 14 or newer</p>
-      <p class="req">Also for <a href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.3/Fotohaus-1.0.3-Setup.exe">Windows 10 and 11</a> and <a href="https://github.com/aelnagish/fotohaus/releases/download/v1.0.3/Fotohaus-1.0.3-x86_64.AppImage">Linux</a></p>
+      <p class="req">Version 1.0.3 · free · Mac: Apple silicon, macOS 14 or newer · Windows 10 and 11 · 64-bit Linux · <a href="https://github.com/aelnagish/fotohaus">Source on GitHub</a></p>
       <p class="brew">Or with Homebrew: <code>brew install --cask aelnagish/tap/fotohaus</code></p>
       <p class="firstrun">First launch: if macOS says Fotohaus “is damaged”, click Cancel, not Move to Trash. <a href="#first-launch">Here’s the one-line fix.</a></p>
     </div>
@@ -516,6 +522,19 @@ faces=<b>rect64(3f845bcb59418507),8e62398ebda8c1a5</b></div>
     var done=function(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy"},1600)};
     try{navigator.clipboard.writeText(t).then(done,function(){})}catch(e){}
   });
+})();
+</script>
+<script>
+(function(){
+  var ua = navigator.userAgent, os = /Windows/.test(ua) ? "win" : (/Linux/.test(ua) && !/Android/.test(ua)) ? "linux" : null;
+  if (!os) return;
+  var box = document.querySelector(".hero .ctas"), mine = box && box.querySelector('[data-os="' + os + '"]');
+  if (!mine) return;
+  box.querySelectorAll(".btn").forEach(function(b){ b.classList.remove("btn-main"); b.classList.add("btn-ghost"); });
+  mine.classList.remove("btn-ghost"); mine.classList.add("btn-main");
+  mine.lastChild.textContent = os === "win" ? " Download for Windows " : " Download for Linux ";
+  box.querySelector('[data-os="mac"]').lastChild.textContent = " Mac ";
+  box.insertBefore(mine, box.firstChild);
 })();
 </script>
 </body>
