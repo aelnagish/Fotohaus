@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 import threading
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -45,7 +46,18 @@ def make_thumb(row, size: int = THUMB_PX) -> Path:
     tmp = out.with_name(f"{out.stem}.{os.getpid()}-{threading.get_ident()}.tmp")
     try:
         im.save(tmp, "JPEG", quality=86 if size <= THUMB_PX else 92)
-        os.replace(tmp, out)
+        for attempt in range(5):
+            try:
+                os.replace(tmp, out)
+                break
+            except PermissionError:
+                # Windows won't replace a file another thread is replacing or reading this moment:
+                # if that thread already wrote the thumbnail, use it; otherwise try again shortly.
+                if out.exists():
+                    break
+                if attempt == 4:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
     finally:
         if tmp.exists():
             tmp.unlink()
