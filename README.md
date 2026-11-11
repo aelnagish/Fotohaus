@@ -166,9 +166,9 @@ system, including the command line, the Claude (MCP) setup and how to uninstall,
 
 | System | Download | Needs |
 |---|---|---|
-| **Mac** | `Fotohaus-1.0.2-arm64.dmg` | Apple Silicon (M1 or newer), macOS 14 Sonoma or newer |
-| **Windows** | `Fotohaus-1.0.2-Setup.exe` | 64-bit Windows 10 or 11 |
-| **Linux** | `Fotohaus-1.0.2-x86_64.AppImage` | 64-bit, glibc 2.28 or newer (Ubuntu 20.04, Debian 10, Fedora 29 and later) |
+| **Mac** | `Fotohaus-1.0.3-arm64.dmg` | Apple Silicon (M1 or newer), macOS 14 Sonoma or newer |
+| **Windows** | `Fotohaus-1.0.3-Setup.exe` | 64-bit Windows 10 or 11 |
+| **Linux** | `Fotohaus-1.0.3-x86_64.AppImage` | 64-bit, glibc 2.28 or newer (Ubuntu 20.04, Debian 10, Fedora 29 and later) |
 
 ### Mac
 
@@ -242,7 +242,7 @@ that comes with each app. Among them: place names from [GeoNames](https://www.ge
 (CC BY 4.0), map tiles from [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors,
 and face models from [OpenCV Zoo](https://github.com/opencv/opencv_zoo). The source code of the GPL
 libraries inside the apps (such as FFmpeg, x264 and x265) is attached to each release as
-`fotohaus-1.0.2-gpl-sources.tar`.
+`fotohaus-1.0.3-gpl-sources.tar`.
 
 Fotohaus is an independent project and is not affiliated with or endorsed by Apple, Google or
 Microsoft. All product names mentioned are trademarks of their owners.

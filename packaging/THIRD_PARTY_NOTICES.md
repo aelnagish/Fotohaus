@@ -72,7 +72,7 @@ SVT-AV1, libaom, OpenEXR) are under permissive or LGPL licenses; their license t
 - **Fotohaus:** https://github.com/aelnagish/fotohaus (each release has the matching source).
 - **GPL components** (FFmpeg 7.1.1 and 9.0.2, x264 and x265 at the exact revisions above, and the
   build scripts used for the OpenCV and PyAV wheels): the archive
-  `fotohaus-1.0.2-gpl-sources.tar` attached to the same GitHub release as the app. The same archive
+  `fotohaus-1.0.3-gpl-sources.tar` attached to the same GitHub release as the app. The same archive
   covers all three systems: PyAV and pillow-heif ship identical GPL builds on Mac, Windows and
   Linux, and OpenCV's GPL build is only in the Mac app.
 - **LGPL components** (Qt, PySide6, FFmpeg in Qt Multimedia, FFmpeg 7.1 and 8.1.1 in OpenCV on

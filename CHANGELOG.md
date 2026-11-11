@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3 — 2026-11-11
+
+- Rounded buttons throughout, in the editor, the panels and the toolbar, in light and dark mode
+- New **Feedback** button in the toolbar (and *Help ▸ Send Feedback…*): opens an email with the
+  Fotohaus version and system already filled in
+- New **Coffee** button in the toolbar to support Fotohaus
+- The Import button no longer shows a stray menu arrow
+
 ## 1.0.2 — 2026-11-11
 
 - Fotohaus now also runs on Windows (installer) and Linux (AppImage), built and tested on GitHub

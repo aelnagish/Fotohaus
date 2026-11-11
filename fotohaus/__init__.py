@@ -13,7 +13,7 @@ A clean-room, Picasa-compatible photo manager: it reads and writes the
 albums, face tags and non-destructive edits carry over.
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 APP_NAME = "Fotohaus"
 SUPPORT_URL = "https://buymeacoffee.com/aelnagish"
 FEEDBACK_EMAIL = "ael.nagish@gmail.com"
