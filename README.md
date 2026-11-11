@@ -68,8 +68,9 @@ Two quieter places help keep the library tidy:
 
 - **Archive** tucks away screenshots, receipts and the photos you want to keep but not see every
   day. They stay on disk and come back with one click.
-- **Recently Deleted** holds anything you delete for **30 days**, so a slip of the finger is never
-  final. Only then do files move to the Mac's Trash.
+- **Recently Deleted** holds anything you delete in the library for **30 days**, so a slip of the
+  finger is never final. Only then do files move to the Mac's Trash. (In the Photo Viewer, Delete
+  sends the photo straight to the Trash, like Picasa, with a moment to **Undo**.)
 
 ## Find anyone, and anything
 

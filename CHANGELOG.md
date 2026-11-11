@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Photo Viewer: Delete now really deletes. Like Picasa, the photo (and its Live Photo video) goes
+  straight to the Mac's Trash, the next picture slides in, and a small bar offers **Undo** (or ⌘Z)
+  for a few seconds. Before, library photos stayed in the folder and came back the next time the
+  viewer opened, and the filmstrip kept showing them
+- Photo Viewer: no more plain system warning when deleting a photo outside the library
+- Photo Viewer: no error messages in the log when it closes while thumbnails are still loading
+
 ## 1.0.1 — 2026-10-28
 
 - Photo Viewer: the mouse wheel now zooms in and out around the pointer with every mouse,

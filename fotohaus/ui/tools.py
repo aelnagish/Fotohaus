@@ -231,7 +231,7 @@ SHORTCUTS = [
                    ("Double-click", "Fit / 100%"), ("O", "Show overflow pixels")]),
     ("Photo Viewer", [("← / →, Space", "Previous / next"), ("Wheel, pinch, + / −", "Zoom"), ("0", "Fit"),
                       ("[ / ]", "Rotate"), ("⌘8", "Star"), ("I", "Info"), ("Return", "Edit in Fotohaus"),
-                      ("⌫", "Delete"), ("Esc / click outside", "Close")]),
+                      ("⌫", "Move to the Trash (⌘Z to undo)"), ("Esc / click outside", "Close")]),
     ("Slideshow", [("Space", "Pause / play"), ("← / →", "Previous / next"), ("↑ / ↓", "Slower / faster"),
                    ("⌘8", "Star"), ("Esc", "Exit")]),
 ]

@@ -11,7 +11,7 @@ import re
 
 from PySide6.QtCore import (QEvent, QObject, QPointF, QRectF, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal)
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QKeySequence, QMovie, QPainter, QShortcut
-from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 
 from .. import media, thumbs
 from . import pointer, theme
@@ -71,7 +71,10 @@ class _Load(QRunnable):
                 img = QImage(str(thumbs.make_thumb(self.row, self.size)))
         except Exception:
             img = QImage()
-        self.sig.done.emit(self.row["path"], self.size, img)
+        try:
+            self.sig.done.emit(self.row["path"], self.size, img)
+        except RuntimeError:      # the viewer closed while this was loading
+            pass
 
 
 class _StripSig(QObject):
@@ -88,7 +91,10 @@ class _StripLoad(QRunnable):
             img = QImage(str(thumbs.make_thumb(self.row, thumbs.THUMB_PX)))
         except Exception:
             img = QImage()
-        self.sig.done.emit(self.row["path"], img)
+        try:
+            self.sig.done.emit(self.row["path"], img)
+        except RuntimeError:
+            pass
 
 
 class _Button(QToolButton):
@@ -140,8 +146,10 @@ class PhotoViewer(QWidget):
         self.strip_icons: dict = {}
         self.strip_sig = _StripSig()
         self.strip_sig.done.connect(self._strip_loaded)
+        self._undo = None          # last delete, while its Undo bar is showing
         self._build_bar()
         self._build_strip()
+        self._build_toast()
         self._shortcuts()
         scr = QGuiApplication.screenAt(self.cursor().pos()) or QGuiApplication.primaryScreen()
         self.setGeometry(scr.availableGeometry())
@@ -212,6 +220,43 @@ class PhotoViewer(QWidget):
         self.strip.itemClicked.connect(lambda it: self.show_item(self.items.index(it.data(Qt.UserRole)))
                                        if it.data(Qt.UserRole) in self.items else None)
 
+    def _build_toast(self):
+        """The small 'Moved to the Trash · Undo' bar shown after a delete."""
+        self.toast = QWidget(self)
+        self.toast.setObjectName("ViewerToast")
+        self.toast.setStyleSheet("#ViewerToast { background: rgba(20,20,22,230); border-radius: 12px; }"
+                                 "QLabel { color: #e6e6e6; }")
+        h = QHBoxLayout(self.toast)
+        h.setContentsMargins(16, 8, 10, 8)
+        h.setSpacing(12)
+        self.toast_label = QLabel()
+        h.addWidget(self.toast_label)
+        self.toast_undo = QToolButton()
+        self.toast_undo.setText("Undo")
+        self.toast_undo.setToolTip("Undo (⌘Z)")
+        self.toast_undo.setCursor(Qt.PointingHandCursor)
+        self.toast_undo.setStyleSheet(f"QToolButton {{ color: {theme.ACCENT.lighter(135).name()}; background: none; "
+                                      f"border: none; font-weight: 600; padding: 3px 6px; border-radius: 5px; }}"
+                                      f"QToolButton:hover {{ background: rgba(255,255,255,30); }}")
+        self.toast_undo.clicked.connect(self.undo_delete)
+        h.addWidget(self.toast_undo)
+        self.toast.hide()
+        self.toast_timer = QTimer(self, singleShot=True, interval=6000, timeout=self._toast_expired)
+
+    def _show_toast(self, text, can_undo):
+        fm = self.toast_label.fontMetrics()
+        self.toast_label.setText(fm.elidedText(text, Qt.ElideMiddle, 420))
+        self.toast_undo.setVisible(can_undo)
+        self.toast.adjustSize()
+        self._layout_overlays()
+        self.toast.show()
+        self.toast.raise_()
+        self.toast_timer.start()
+
+    def _toast_expired(self):
+        self.toast.hide()
+        self._finish_delete()
+
     def _strip_window(self):
         """Load thumbnails for the strip around the current picture."""
         lo, hi = max(0, self.i - 12), min(len(self.items), self.i + 13)
@@ -253,15 +298,21 @@ class PhotoViewer(QWidget):
         QShortcut(QKeySequence("Ctrl+8"), self, self.toggle_star)
         QShortcut(QKeySequence(Qt.Key_L), self, self.play_live)
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)
+        QShortcut(QKeySequence("Ctrl+Z"), self, self.undo_delete)
 
     def resizeEvent(self, e):
+        self._layout_overlays()
+        if self.video is not None:
+            self._place_video()
+        super().resizeEvent(e)
+
+    def _layout_overlays(self):
         self.bar.adjustSize()
         self.bar.move((self.width() - self.bar.width()) // 2, self.height() - self.bar.height() - 26)
         sw = min(self.width() - 80, max(300, 64 * self.strip.count() + 16))
         self.strip.setGeometry((self.width() - sw) // 2, self.bar.y() - 84, sw, 76)
-        if self.video is not None:
-            self._place_video()
-        super().resizeEvent(e)
+        self.toast.adjustSize()
+        self.toast.move((self.width() - self.toast.width()) // 2, self.strip.y() - self.toast.height() - 12)
 
     def _autohide(self):
         if not self.bar.underMouse() and not self.strip.underMouse():
@@ -433,21 +484,65 @@ class PhotoViewer(QWidget):
         self.update()
 
     def delete(self):
+        """Like Picasa Photo Viewer: the file goes straight to the Mac's Trash (with its Live Photo
+        video), the next picture slides in, and a small bar offers Undo for a few seconds."""
+        if not self.items:
+            return
+        self._finish_delete()
         path = self.items[self.i]
-        r = self.lib.photo_by_path(path)
-        if r is not None:      # library photos go to Recently Deleted (restorable for 30 days)
-            self._stop_media()
-            ok = self.lib.soft_delete([r["id"]])
-        else:
-            if QMessageBox.question(self, "Move to Trash", f"Move “{os.path.basename(path)}” to the Trash?") \
-                    != QMessageBox.Yes:
-                return
-            self._stop_media()
-            from ..library import _trash
-            ok = _trash(path)
-        if ok:
-            self.items.pop(self.i)
-            self.show_item(min(self.i, len(self.items) - 1))
+        name = os.path.basename(path)
+        self._stop_media()
+        paths = [path] + ([self.live] if getattr(self, "live", None) and self.live != path else [])
+        moved = self.lib.trash_paths(paths)
+        if path not in [m[0] for m in moved]:
+            self.lib.untrash_paths(moved)       # don't leave the Live Photo video half-deleted
+            self.show_item(self.i)
+            self._show_toast(f"Couldn't move “{name}” to the Trash", False)
+            return
+        k = self.i
+        self.items.pop(k)
+        if k < self.strip.count():
+            self.strip.takeItem(k)
+        self.cache = {key: v for key, v in self.cache.items() if key[0] != path}
+        self._undo = {"moved": moved, "path": path, "index": k}
+        can_undo = all(where for _, where in moved)
+        if not self.items:                      # that was the last one: nothing left to show
+            self._finish_delete()
+            self.close()
+            return
+        self._layout_overlays()
+        self.show_item(min(k, len(self.items) - 1))
+        self._show_toast(f"Moved “{name}” to the Trash", can_undo)
+
+    def undo_delete(self):
+        u = self._undo
+        if u is None:
+            return
+        self._undo = None
+        self.toast_timer.stop()
+        self.toast.hide()
+        back = self.lib.untrash_paths(u["moved"])
+        self.lib.forget_trashed([o for o, _ in u["moved"] if o not in back])
+        if u["path"] not in back:
+            self._show_toast(f"Couldn't put “{os.path.basename(u['path'])}” back", False)
+            return
+        from PySide6.QtWidgets import QListWidgetItem
+        k = min(u["index"], len(self.items))
+        self.items.insert(k, u["path"])
+        it = QListWidgetItem()
+        it.setToolTip(os.path.basename(u["path"]))
+        it.setData(Qt.UserRole, u["path"])
+        if self.strip_icons.get(u["path"]) is not None:
+            it.setIcon(self.strip_icons[u["path"]])
+        self.strip.insertItem(k, it)
+        self._layout_overlays()
+        self.show_item(k)
+
+    def _finish_delete(self):
+        """The Undo chance has passed: drop the deleted photo from the library for good."""
+        u, self._undo = self._undo, None
+        if u is not None:
+            self.lib.forget_trashed([o for o, _ in u["moved"]])
 
     def slideshow(self):
         from .slideshow import Slideshow
@@ -646,6 +741,7 @@ class PhotoViewer(QWidget):
         return super().event(e)
 
     def closeEvent(self, e):
+        self._finish_delete()
         self._stop_media()
         self.closed.emit()
         super().closeEvent(e)

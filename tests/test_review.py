@@ -712,6 +712,61 @@ def test_viewer_mouse_wheel_zooms():
     v.deleteLater()
 
 
+
+def test_viewer_delete_sends_file_to_trash_with_undo():
+    """Delete in the Photo Viewer moves the file (and its Live Photo video) to the Trash, keeps the
+    filmstrip in step, offers Undo, and the photo doesn't come back when the folder is reopened."""
+    import shutil
+    from PySide6.QtWidgets import QApplication
+    from fotohaus import library as L
+    from fotohaus.ui.viewer import PhotoViewer
+    app = QApplication.instance() or QApplication([])
+    trash = Path(tempfile.mkdtemp())             # a stand-in Trash, so tests never touch the real one
+
+    def fake_trash_to(path):
+        if not os.path.exists(path):
+            return False, None
+        dest = trash / os.path.basename(path)
+        shutil.move(path, dest)
+        return True, str(dest)
+    real = L._trash_to
+    L._trash_to = fake_trash_to
+    try:
+        lib, root = _lib()
+        for k in range(4):
+            _jpg(root / f"p{k}.jpg", seed=k + 1)
+        (root / "p2.mov").write_bytes(b"live")
+        lib.add_root(str(root))
+        lib.scan()
+        names = lambda v: [os.path.basename(p) for p in v.items]   # noqa: E731
+        v = PhotoViewer(lib, str(root / "p1.jpg"))
+        v.delete()
+        assert names(v) == ["p0.jpg", "p2.jpg", "p3.jpg"] and v.strip.count() == 3
+        assert not (root / "p1.jpg").exists() and (trash / "p1.jpg").exists()
+        assert not v.toast.isHidden() and not v.toast_undo.isHidden()
+        assert lib.photo_by_path(str(root / "p1.jpg"))["deleted"] is not None
+        v.undo_delete()
+        assert names(v) == ["p0.jpg", "p1.jpg", "p2.jpg", "p3.jpg"] and v.strip.count() == 4
+        assert (root / "p1.jpg").exists() and lib.photo_by_path(str(root / "p1.jpg"))["deleted"] is None
+        # the Live Photo's video goes with its still; once Undo has passed the rows are gone too
+        v.show_item(2)
+        v.delete()
+        v._toast_expired()
+        assert not (root / "p2.jpg").exists() and not (root / "p2.mov").exists()
+        assert lib.photo_by_path(str(root / "p2.jpg")) is None and lib.photo_by_path(str(root / "p2.mov")) is None
+        v.close()
+        assert names(PhotoViewer(lib, str(root / "p0.jpg"))) == ["p0.jpg", "p1.jpg", "p3.jpg"]
+        # a file that can't be trashed stays put and says so, with no Undo
+        L._trash_to = lambda path: (False, None)
+        v = PhotoViewer(lib, str(root / "p0.jpg"))
+        v.delete()
+        assert names(v) == ["p0.jpg", "p1.jpg", "p3.jpg"] and "Couldn't" in v.toast_label.text()
+        assert v.toast_undo.isHidden()
+        v.close()
+    finally:
+        L._trash_to = real
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):

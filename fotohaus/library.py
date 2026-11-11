@@ -1141,12 +1141,61 @@ class Library:
         ids = list(ids)
         done = []
         for r in self.photos_by_ids(ids):
-            if _trash(r["path"]):
+            # a file that is already gone (e.g. sent to the Trash from the Photo Viewer) just loses its row
+            if _trash(r["path"]) or not os.path.exists(r["path"]):
                 done.append(r["id"])
         self._delete_photo_rows(done)
         self.db.x("UPDATE folders SET count=(SELECT COUNT(*) FROM photos WHERE folder_id=folders.id)")
         self.emit("library")
         return len(done)
+
+    # ------------------------------------------------------------------ Photo Viewer delete (straight to the Trash)
+    def trash_paths(self, paths: Iterable[str]) -> list[tuple[str, str | None]]:
+        """Move files to the Mac's Trash right away, like Picasa Photo Viewer. Their library rows are only
+        hidden until forget_trashed(), so untrash_paths() can still undo it. Returns (original, in_trash)
+        for every file that moved; in_trash is None when the Trash location is unknown."""
+        moved, ids = [], []
+        for p in paths:
+            p = os.path.abspath(p)
+            ok, where = _trash_to(p)
+            if not ok:
+                continue
+            moved.append((p, where))
+            r = self.photo_by_path(p)
+            if r is not None:
+                ids.append(r["id"])
+        if ids:
+            self._set_flag("deleted", ids, time.time())
+        return moved
+
+    def untrash_paths(self, moved: Iterable[tuple[str, str | None]]) -> list[str]:
+        """Undo trash_paths: put the files back where they were and show them in the library again."""
+        back = []
+        for orig, where in moved:
+            if not where or not os.path.exists(where) or os.path.exists(orig):
+                continue
+            try:
+                shutil.move(where, orig)
+            except OSError:
+                continue
+            back.append(orig)
+            info = Path(where).parent.parent / "info" / (Path(where).name + ".trashinfo")   # freedesktop Trash
+            if Path(where).parent.name == "files" and info.exists():
+                info.unlink(missing_ok=True)
+        ids = [r["id"] for r in (self.photo_by_path(p) for p in back) if r is not None and r["deleted"] is not None]
+        if ids:
+            self.restore_deleted(ids)
+        return back
+
+    def forget_trashed(self, paths: Iterable[str]) -> None:
+        """Drop the library rows of files that trash_paths sent to the Trash and that weren't brought back."""
+        ids = [r["id"] for r in (self.photo_by_path(p) for p in paths)
+               if r is not None and r["deleted"] is not None and not os.path.exists(r["path"])]
+        if not ids:
+            return
+        self._delete_photo_rows(ids)
+        self.db.x("UPDATE folders SET count=(SELECT COUNT(*) FROM photos WHERE folder_id=folders.id)")
+        self.emit("library")
 
     def rename_folder_title(self, fid: int, title: str, description: str | None = None) -> None:
         f = self.folder(fid)
@@ -1161,18 +1210,28 @@ class Library:
 
 
 def _trash(path: str) -> bool:
+    return _trash_to(path)[0]
+
+
+def _trash_to(path: str) -> tuple[bool, str | None]:
+    """Move a file to the Trash. Returns (moved, where it is now in the Trash, if known)."""
     try:
         from PySide6.QtCore import QFile
-        return bool(QFile.moveToTrash(path))
+        f = QFile(path)
+        if f.moveToTrash():
+            return True, f.fileName()     # Qt points the QFile at its new place in the Trash
+        if not os.path.exists(path):
+            return False, None
     except Exception:
         pass
     if sys.platform == "darwin":
         import subprocess
         from .macos import applescript_str
         script = 'tell application "Finder" to delete POSIX file ' + applescript_str(path)
-        return subprocess.call(["osascript", "-e", script], stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL) == 0
-    return False
+        ok = subprocess.call(["osascript", "-e", script], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL) == 0
+        return ok, None
+    return False, None
 
 
 def _save_like_original(im, dest: str, original: str) -> None:
