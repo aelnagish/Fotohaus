@@ -44,8 +44,9 @@ In Partner Center, *Start submission* and fill in:
 - **Age ratings:** answer the questionnaire (no violence, no user-to-user communication, no
   purchases, no data shared).
 - **Packages:** upload `Fotohaus-<version>-x64.msix`.
-- **Store listing** (English): the text below, at least one screenshot taken on Windows
-  (1366 × 768 or larger), and the icon.
+- **Store listing** (English): the text below, the icon, and the screenshots from the workflow
+  artifact **Store-Screenshots** (1920 × 1080, taken on Windows with sample photos by
+  `packaging/store_screenshots.py`).
 - **Submission options ▸ restricted capabilities.** The form asks why the package uses
   `runFullTrust`. Answer:
 

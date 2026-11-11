@@ -139,6 +139,45 @@ jobs:
           path: build/Fotohaus-*-x64.msix
           if-no-files-found: error
 
+  screenshots:
+    name: Store screenshots
+    # Opens Fotohaus on Windows with sample photos and saves 1920 x 1080 screenshots for the store
+    # listings (artifact "Store-Screenshots"). See packaging/store_screenshots.py.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements.txt -c packaging/constraints.txt
+      - name: Screen of 1920 x 1080 (the runner starts with a smaller one)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Get-CimInstance Win32_VideoController | Select-Object CurrentHorizontalResolution, CurrentVerticalResolution
+      - name: Screenshots
+        shell: pwsh
+        run: |
+          python packaging/store_screenshots.py --out build/screenshots
+          if ($LASTEXITCODE -eq 3) {
+            Write-Host "The screen is smaller than 1920 x 1080: taking them off-screen instead"
+            $env:QT_QPA_PLATFORM = "offscreen"
+            python packaging/store_screenshots.py --out build/screenshots
+          }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Store-Screenshots
+          path: build/screenshots/*.png
+          if-no-files-found: error
+
   flatpak:
     name: Linux Flatpak
     runs-on: ubuntu-24.04
