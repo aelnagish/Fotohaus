@@ -2,12 +2,14 @@
 
 # Fotohaus
 
-**Your photos. Your Mac. Nobody else's business.**
+**Your photos. Your computer. Nobody else's business.**
 
-A fast, private photo organizer for macOS that finds faces, reads text in photos, edits without
-touching your originals, and never uploads a single pixel.
+A fast, private photo viewer and organizer for **Mac, Windows and Linux** that finds faces,
+searches your photos, edits without touching your originals, and never uploads a single pixel.
 
 [![macOS](https://img.shields.io/badge/macOS%2014%2B-Apple%20Silicon-black?logo=apple)](#install)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install)
+[![Linux](https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&logoColor=black)](#install)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%E2%98%95-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/aelnagish)
 
@@ -21,24 +23,26 @@ touching your originals, and never uploads a single pixel.
 
 *Fotohaus*: one home for every picture you've ever taken.
 
-Point it at the folders already on your Mac, and in a few minutes years of photos are sorted,
+Point it at the folders already on your computer, and in a few minutes years of photos are sorted,
 searchable and easy to show off. Nothing is copied into a hidden library and nothing leaves your
 computer. Your files stay exactly where they are.
 
 ## Why Fotohaus
 
-- **Private by design.** Face recognition, search and editing all run on your Mac. No account,
-  no cloud, no tracking.
+- **Private by design.** Face recognition, search and editing all run on your computer. No
+  account, no cloud, no tracking.
 - **Your folders, untouched.** No import into a hidden library. Fotohaus works on the folders you
   already have, and every edit is reversible.
-- **Fast.** Open a photo from Finder and it appears instantly over your desktop, with the rest of
-  the folder one arrow key away.
+- **Fast.** Open a photo from Finder or File Explorer and it appears instantly over your desktop,
+  with the rest of the folder one arrow key away.
 - **Clever where it counts.** Search for "dog on the beach", "receipt" or a friend's name and get
   answers, not filenames.
+- **One app, three systems.** The same Fotohaus runs on Mac, Windows and Linux, so your library
+  habits move with you.
 
 ## Flip through a folder in a blink
 
-Double-click any photo in Finder and it opens instantly over your desktop. Then just press
+Double-click any photo in Finder or File Explorer and it opens instantly over your desktop. Then just press
 **←** and **→** to glide through every other photo in the same folder. No importing, no waiting,
 no library to set up first. Zoom with the scroll wheel, star or rotate as you go, and press
 **Esc** to get back to what you were doing.
@@ -52,7 +56,7 @@ no library to set up first. Zoom with the scroll wheel, star or rotate as you go
 Each day Fotohaus looks back through your library for pictures taken on today's date in
 earlier years, and gathers them into **Memories**: "2 years ago", "3 years ago", ready to play as a
 slideshow. Each photo also knows where it was taken ("Lauterbrunnen, Bern, Switzerland"), worked out
-on your Mac from a built-in atlas, so you can simply search for a town.
+on your computer from a built-in atlas, so you can simply search for a town.
 
 <div align="center">
 <img src="docs/memories.jpg" alt="Fotohaus Memories: photos from this day two, three and four years ago, with the place shown in the info panel" width="100%">
@@ -61,23 +65,24 @@ on your Mac from a built-in atlas, so you can simply search for a town.
 ## Some photos are just for you
 
 Select pictures and choose **Move to Private**. They vanish from the library, search, Memories,
-People and Places, and the **Private** collection opens only with **Touch ID** (or your Mac
-password). It locks again when you quit.
+People and Places, and the **Private** collection opens only with **Touch ID** on a Mac,
+**Windows Hello** on Windows, or a password you set on Linux. It locks again when you quit.
 
 Two quieter places help keep the library tidy:
 
 - **Archive** tucks away screenshots, receipts and the photos you want to keep but not see every
   day. They stay on disk and come back with one click.
 - **Recently Deleted** holds anything you delete in the library for **30 days**, so a slip of the
-  finger is never final. Only then do files move to the Mac's Trash. (In the Photo Viewer, Delete
-  sends the photo straight to the Trash, like Picasa, with a moment to **Undo**.)
+  finger is never final. Only then do files move to the Trash (the Recycle Bin on Windows). In the
+  Photo Viewer, Delete sends the photo straight there, with a moment to **Undo**.
 
 ## Find anyone, and anything
 
-Name a face once and Fotohaus suggests the same person across the years, all on your Mac. Search
-understands people, places, tags and dates (`person:anna place:zermatt year:2019`), the objects and
-scenes in a photo ("dog", "beach"), and even the **words in it**: type "invoice" or a street sign
-and find the picture.
+Name a face once and Fotohaus suggests the same person across the years, all on your computer.
+Search understands people, places, tags and dates (`person:anna place:zermatt year:2019`) and,
+with the optional search model, plain descriptions like "kids playing in the snow". On a Mac it
+also knows the objects and scenes in a photo ("dog", "beach") and the **words in it**: type
+"invoice" or a street sign and find the picture.
 
 ## Bursts, RAW pairs and Live Photos, tidied up
 
@@ -85,11 +90,11 @@ A burst of twelve near-identical shots, the RAW and JPEG of the same moment, the
 behind an iPhone Live Photo: Fotohaus folds each into one **stack** with a small badge, so the
 library shows moments, not clutter. Open a Live Photo and press **L** to see it move.
 
-## Coming from Picasa?
+## Bring your old library along
 
-Point Fotohaus at your old Picasa folders and your stars, captions, albums, face tags and edits
-are there, read straight from the `.picasa.ini` files Picasa left behind. Fotohaus keeps writing
-them, so nothing is locked in.
+Have folders an older photo organizer has looked after for years? Fotohaus reads the `.picasa.ini`
+files sitting next to your photos, so your stars, captions, albums, face tags and edits come
+straight back. It keeps writing them too, so nothing is locked in.
 
 ## What it does
 
@@ -112,8 +117,8 @@ them, so nothing is locked in.
 
 ### Find
 - **Faces**: on-device detection and recognition. Name someone once and Fotohaus suggests the rest
-- **Smart search** for objects, scenes and text inside photos, using Apple's on-device Vision
-- Optional natural-language search ("kids playing in the snow")
+- Optional natural-language search ("kids playing in the snow"), on every system
+- **Smart search** for objects, scenes and text inside photos (Mac, using Apple's on-device Vision)
 - Duplicate and near-duplicate finder that keeps the best copy
 - Nested tags like `Trips/2024/Alps`, browsable as a tree
 
@@ -135,7 +140,7 @@ them, so nothing is locked in.
 ### Share and create
 - Collages (six styles), slideshows, and **movies with music**
 - Posters, contact sheets, passport photos, and print or PDF
-- Web gallery export, map export, email and the macOS Share menu
+- Web gallery export, map export, email, and the Share menu on a Mac
 - Backups to any drive, with incremental updates and restore
 
 </td>
@@ -155,7 +160,17 @@ and `fotohaus-cli mcp` lets AI assistants that support MCP search and organize y
 
 ## Install
 
-Fotohaus runs on Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.
+Download the latest version from [Releases](../../releases/latest). The step-by-step guide for each
+system, including the command line, the Claude (MCP) setup and how to uninstall, is in
+[INSTALL.md](INSTALL.md).
+
+| System | Download | Needs |
+|---|---|---|
+| **Mac** | `Fotohaus-1.0.2-arm64.dmg` | Apple Silicon (M1 or newer), macOS 14 Sonoma or newer |
+| **Windows** | `Fotohaus-1.0.2-Setup.exe` | 64-bit Windows 10 or 11 |
+| **Linux** | `Fotohaus-1.0.2-x86_64.AppImage` | 64-bit, glibc 2.28 or newer (Ubuntu 20.04, Debian 10, Fedora 29 and later) |
+
+### Mac
 
 **With Homebrew** (opens without the first-launch warning, and adds `fotohaus-cli`):
 
@@ -163,29 +178,31 @@ Fotohaus runs on Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or newer.
 brew install --cask aelnagish/tap/fotohaus
 ```
 
-> [!IMPORTANT]
-> **macOS says "Fotohaus is damaged and can't be opened"?** Click **Cancel**, not *Move to Trash*.
-> Nothing is wrong with the app: macOS says this about every app from the internet that Apple
-> hasn't notarized yet. Open **Terminal** (⌘ Space, type *Terminal*, press Return), run this once,
-> then open Fotohaus again:
->
-> ```bash
-> xattr -cr /Applications/Fotohaus.app
-> ```
+**Or from the disk image:** open it and drag **Fotohaus** into **Applications**. Fotohaus isn't
+notarized by Apple yet, so macOS blocks it the first time:
 
-**Or download it yourself:**
+- If macOS says it **"is damaged and can't be opened"**, click *Cancel* (not *Move to Trash*).
+  Nothing is wrong with the app. Open **Terminal**, run this once, then open Fotohaus again:
 
-1. Download `Fotohaus-1.0.2-arm64.dmg` from [Releases](../../releases).
-2. Open the disk image and drag **Fotohaus** into **Applications**.
-3. Open Fotohaus. It isn't notarized by Apple yet, so macOS blocks it the first time:
-   - If macOS says it **"is damaged and can't be opened"**, click *Cancel* and run the one-line
-     fix in the box above.
-   - If it says it **"could not verify"** Fotohaus, open *System Settings ▸ Privacy & Security*,
-     scroll down and click **Open Anyway** next to the message about Fotohaus.
-4. To open photos in Fotohaus when you double-click them, use *Tools ▸ Options ▸ Photo Viewer*.
+  ```bash
+  xattr -cr /Applications/Fotohaus.app
+  ```
 
-The full guide, including the command line, the Claude (MCP) setup and how to uninstall, is in
-[INSTALL.md](INSTALL.md).
+- If it says it **"could not verify"** Fotohaus, open *System Settings ▸ Privacy & Security*,
+  scroll down and click **Open Anyway**.
+
+### Windows
+
+Run the installer. It needs no administrator rights. Until the installer is code-signed, Windows
+shows **"Windows protected your PC"** the first time: click **More info**, then **Run anyway**.
+
+### Linux
+
+Make the AppImage executable (`chmod +x Fotohaus-*.AppImage`, or *Properties ▸ Allow executing as
+program*) and double-click it.
+
+To open photos in Fotohaus when you double-click them, on any system, use
+*Tools ▸ Options ▸ Photo Viewer*.
 
 ### Run from source
 
@@ -198,10 +215,12 @@ python -m fotohaus            # app
 python -m fotohaus.cli --help # command line
 ```
 
-Your library database lives in `~/Library/Application Support/Fotohaus` (set `FOTOHAUS_HOME` to use
-a different place). Run the tests with `pip install -r requirements-dev.txt`, then `python tests/test_fotohaus.py` and
-`python tests/test_review.py`. To build the app and disk
-image, see `packaging/build_mac_app.py`.
+Python 3.11 or newer (3.12 is what the builds use) works on all three systems (on Windows, use `py -m venv .venv` and
+`.venv\Scripts\activate`). The library database lives in `~/Library/Application Support/Fotohaus`
+on a Mac, `%LOCALAPPDATA%\Fotohaus` on Windows and `~/.local/share/fotohaus` on Linux (set
+`FOTOHAUS_HOME` to use a different place). Run the tests with `pip install -r requirements-dev.txt`, then `python tests/test_fotohaus.py` and
+`python tests/test_review.py`. To build the apps yourself, see
+`packaging/build_mac_app.py`, `packaging/build_windows.py` and `packaging/build_linux.py`.
 
 ## Support
 
@@ -217,10 +236,17 @@ Fotohaus is free software, licensed under the **GNU General Public License, vers
 (see [LICENSE](LICENSE)). You may use, study, share and change it; if you distribute it, modified
 or not, you must pass on the same freedoms and the source code. Copyright © 2026 Abdullah Yusuf.
 
-The app bundles third-party components under their own licenses, listed in
-[`packaging/THIRD_PARTY_NOTICES.md`](packaging/THIRD_PARTY_NOTICES.md). The source code of the
-GPL libraries inside the app (FFmpeg, x264, x265) is attached to each release as
+The apps bundle third-party software and data under their own licenses, listed in
+[`packaging/THIRD_PARTY_NOTICES.md`](packaging/THIRD_PARTY_NOTICES.md) and in the Licenses folder
+that comes with each app. Among them: place names from [GeoNames](https://www.geonames.org)
+(CC BY 4.0), map tiles from [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors,
+and face models from [OpenCV Zoo](https://github.com/opencv/opencv_zoo). The source code of the GPL
+libraries inside the apps (such as FFmpeg, x264 and x265) is attached to each release as
 `fotohaus-1.0.2-gpl-sources.tar`.
 
-<sub>Screenshots use freely licensed sample images from the scikit-image, imageio and Pillow
-projects. Fotohaus is an independent project.</sub>
+Fotohaus is an independent project and is not affiliated with or endorsed by Apple, Google or
+Microsoft. All product names mentioned are trademarks of their owners.
+
+<sub>Screenshots and the demo use sample images from the imageio and Pillow projects and landscape
+photos from [Unsplash](https://unsplash.com), used under the
+[Unsplash License](https://unsplash.com/license).</sub>

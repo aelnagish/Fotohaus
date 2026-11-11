@@ -1,6 +1,9 @@
 # Installing Fotohaus
 
-Fotohaus runs on Macs with Apple Silicon (M1 or newer) and macOS 14 Sonoma or newer.
+Fotohaus runs on Mac, Windows and Linux. This guide starts with the Mac; [Windows](#windows) and
+[Linux](#linux) have their own sections below.
+
+On a Mac, Fotohaus needs Apple Silicon (M1 or newer) and macOS 14 Sonoma or newer.
 
 ## Install
 
@@ -70,7 +73,7 @@ To let Claude Desktop (or another MCP client) search and organize your library, 
 
 Drag Fotohaus from Applications to the Trash. To remove its library too, delete
 `~/Library/Application Support/Fotohaus` and `~/Library/Caches/Fotohaus`. Your photos are not
-affected. (Picasa-style `.picasa.ini` files Fotohaus wrote next to your photos are harmless and can
+affected. (`.picasa.ini` files Fotohaus wrote next to your photos are harmless and can
 stay.)
 
 ## Windows
@@ -116,4 +119,6 @@ Debian 10, Fedora 29 and later).
 ## License
 
 Fotohaus is free software under the GNU GPL, version 3 or later, and comes with no warranty.
-Third-party licenses are in `Fotohaus.app/Contents/Resources/Licenses`.
+Third-party licenses are in the Licenses folder that comes with the app
+(`Fotohaus.app/Contents/Resources/Licenses` on a Mac, the install folder on Windows, inside the
+AppImage on Linux).
