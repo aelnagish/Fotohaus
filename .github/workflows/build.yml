@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-14]
+        os: [ubuntu-22.04, windows-latest, macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
@@ -114,8 +114,8 @@ jobs:
       PBS_TAG: "20261026"
       PBS_PY: "3.12.16"
       PBS_SHA256: fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e
-      RCODESIGN_VERSION: "0.29.0"
-      RCODESIGN_SHA256: dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002
+      CODESIGN_TOOL_VERSION: "0.29.0"
+      CODESIGN_TOOL_SHA256: dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002
       LIBDMG_COMMIT: e18579b391950589b9ed16ee630c54ce4319bb29
     steps:
       - uses: actions/checkout@v4
@@ -130,8 +130,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/tools" && cd "$RUNNER_TEMP/tools"
           curl -sSfL -o py.tar.gz "https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/cpython-${PBS_PY}+${PBS_TAG}-aarch64-apple-darwin-install_only.tar.gz"
           echo "${PBS_SHA256}  py.tar.gz" | sha256sum -c -
-          curl -sSfL -o rc.tgz "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          echo "${RCODESIGN_SHA256}  rc.tgz" | sha256sum -c -
+          curl -sSfL -o rc.tgz "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${CODESIGN_TOOL_VERSION}/apple-codesign-${CODESIGN_TOOL_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${CODESIGN_TOOL_SHA256}  rc.tgz" | sha256sum -c -
           tar xzf rc.tgz --strip-components=1
           git clone -q https://github.com/mozilla/libdmg-hfsplus && git -C libdmg-hfsplus checkout -q "$LIBDMG_COMMIT"
           cmake -S libdmg-hfsplus -B libdmg-hfsplus/build -DCMAKE_BUILD_TYPE=Release
