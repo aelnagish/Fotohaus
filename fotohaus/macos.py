@@ -10,6 +10,24 @@ import time
 
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
+# Set by Flatpak inside its sandbox: the app's ID there (io.github.aelnagish.Fotohaus), else "".
+FLATPAK_ID = os.environ.get("FLATPAK_ID", "") if sys.platform.startswith("linux") else ""
+# Name of the .desktop file that starts this Fotohaus (without ".desktop").
+LINUX_DESKTOP_ID = FLATPAK_ID or "fotohaus"
+
+
+def is_store_package() -> bool:
+    """True when Fotohaus runs from its Microsoft Store (MSIX) package. Windows then knows the app by
+    its package identity, and the Start menu entry and file types come from the package."""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+        length = ctypes.c_uint32(0)
+        # ERROR_INSUFFICIENT_BUFFER (122): there is a package name; APPMODEL_ERROR_NO_PACKAGE (15700): none
+        return ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(length), None) == 122
+    except Exception:
+        return False
 
 # What the system's file browser is called, for menu items like "Show in Finder".
 FILE_MANAGER = "Finder" if IS_MAC else "File Explorer" if IS_WIN else "File Manager"
@@ -338,6 +356,10 @@ def install_linux_desktop_entry(make_default: bool = True) -> bool:
     import shlex
     import shutil
     from pathlib import Path
+    if FLATPAK_ID:
+        # Flatpak already added Fotohaus to the menu and "Open With". A sandboxed app can't change
+        # the desktop's default apps, so the user picks Fotohaus under "Open With" once.
+        return False
     share = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
     apps = share / "applications"
     icons = share / "icons" / "hicolor" / "256x256" / "apps"

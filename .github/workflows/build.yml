@@ -1,6 +1,8 @@
 # Tests Fotohaus on macOS, Windows and Linux, and builds the Mac DMG, the Windows installer and the Linux AppImage.
 #   - every push to main and every pull request: tests + builds (downloadable under the run's Artifacts)
 #   - a version tag (v1.2.0): the same, then the DMG, installer, AppImage and GPL sources are attached to that release
+# It also builds the two store packages, to upload by hand (packaging/STORES.md): the MSIX for the
+# Microsoft Store (artifact "Store-Windows-MSIX") and the Flatpak for Flathub ("Store-Linux-Flatpak").
 name: Build
 
 on:
@@ -84,9 +86,15 @@ jobs:
         shell: pwsh
         run: choco install innosetup -y --no-progress
       - uses: ilammy/msvc-dev-cmd@v1      # cl and rc, to compile Fotohaus.exe
-      - name: Build
+      - name: Build (installer and Microsoft Store package)
         shell: pwsh
-        run: python packaging/build_windows.py --out build --iscc "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+        env:
+          # the package identity from Partner Center, kept as repository variables (packaging/STORES.md);
+          # without them a test identity is used
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+        run: python packaging/build_windows.py --out build --msix --iscc "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
       - name: Smoke test (starts the installed app folder headless and quits)
         shell: pwsh
         env:
@@ -98,12 +106,92 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $p = Start-Process -FilePath .\build\Fotohaus\Fotohaus.exe -PassThru -Wait
           if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\Fotohaus\Fotohaus.log" -ErrorAction SilentlyContinue; exit 1 }
+      - name: Smoke test of the Store package (installs a test-signed copy, runs its command line tool)
+        shell: pwsh
+        env:
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+        run: |
+          # The Store signs the real package. To install it here, a copy is signed with a throwaway
+          # certificate that carries the same publisher name.
+          $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { "CN=Fotohaus Dev" }
+          $copy = "$env:RUNNER_TEMP\Fotohaus-test.msix"
+          Copy-Item (Get-ChildItem build\Fotohaus-*-x64.msix).FullName $copy
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
+            -FriendlyName "Fotohaus test" -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP\fotohaus-test.cer" | Out-Null
+          Import-Certificate -FilePath "$env:RUNNER_TEMP\fotohaus-test.cer" -CertStoreLocation "Cert:\LocalMachine\TrustedPeople" | Out-Null
+          signtool sign /fd SHA256 /sha1 $cert.Thumbprint $copy
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Add-AppxPackage -Path $copy
+          Get-AppxPackage | Where-Object { $_.PackageFullName -like "*Fotohaus*" } | Format-List Name, Version, InstallLocation
+          & "$env:LOCALAPPDATA\Microsoft\WindowsApps\fotohaus-cli.exe" stats
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       # Code signing goes here once SignPath has approved the project (see packaging/SIGNING.md).
       - uses: actions/upload-artifact@v4
         with:
           name: Fotohaus-Windows
           path: build/Fotohaus-*-Setup.exe
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Store-Windows-MSIX        # unsigned on purpose: upload it to Partner Center, which signs it
+          path: build/Fotohaus-*-x64.msix
+          if-no-files-found: error
+
+  flatpak:
+    name: Linux Flatpak
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow
+      - name: Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils appstream desktop-file-utils
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0    # lets Flatpak's sandbox start on the runner
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Check the menu entry and the store description
+        run: |
+          python packaging/flatpak/install.py --metadata-only build/meta
+          desktop-file-validate build/meta/applications/*.desktop
+          appstreamcli validate --no-net build/meta/metainfo/*.xml
+      - name: Build
+        run: |
+          flatpak-builder --user --install --install-deps-from=flathub --force-clean \
+            --state-dir="$RUNNER_TEMP/flatpak-state" --repo="$RUNNER_TEMP/flatpak-repo" \
+            "$RUNNER_TEMP/flatpak-build" packaging/flatpak/io.github.aelnagish.Fotohaus.yml
+      - name: Libraries the runtime doesn't have (for information; optional Qt plugins may list some)
+        run: |
+          flatpak run --command=sh io.github.aelnagish.Fotohaus -c \
+            'find /app/lib -name "*.so*" -type f | while read -r f; do ldd "$f" 2>/dev/null | grep "not found" | sed "s|^|$f:|"; done | sort -u' | tee missing.txt
+          echo "$(cut -d: -f2 missing.txt | sort -u | wc -l) different libraries not found"
+      - name: Smoke test (starts the app headless and quits)
+        run: |
+          flatpak run --env=QT_QPA_PLATFORM=offscreen --env=FOTOHAUS_AUTOQUIT_MS=4000 io.github.aelnagish.Fotohaus | tee smoke.txt
+          grep -q "FOTOHAUS_AUTOQUIT ok" smoke.txt
+          flatpak run --command=fotohaus-cli io.github.aelnagish.Fotohaus stats
+      - name: Bundle
+        run: |
+          mkdir -p build
+          flatpak build-bundle "$RUNNER_TEMP/flatpak-repo" build/Fotohaus-x86_64.flatpak io.github.aelnagish.Fotohaus \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+          ls -la build/Fotohaus-x86_64.flatpak
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Store-Linux-Flatpak
+          path: build/Fotohaus-x86_64.flatpak
+          if-no-files-found: error
+      - name: Flathub's own checks (for information; what they report is listed in packaging/STORES.md)
+        continue-on-error: true
+        run: |
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest packaging/flatpak/io.github.aelnagish.Fotohaus.yml || true
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo "$RUNNER_TEMP/flatpak-repo" || true
 
   mac:
     name: Mac disk image
@@ -161,6 +249,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: Fotohaus-*        # the downloads; the Store-* packages go to their stores instead
           path: dist
           merge-multiple: true
       - name: GPL source archive

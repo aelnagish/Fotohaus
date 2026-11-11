@@ -1,0 +1,70 @@
+# Flatpak of Fotohaus, for Flathub. See packaging/STORES.md.
+#
+# Fotohaus is installed the same way as in the AppImage: the dependencies as the wheels pinned in
+# packaging/constraints.txt (listed with checksums in python-wheels.json, written by update_wheels.py),
+# trimmed to the parts of Qt that Fotohaus uses, plus the fotohaus package. install.py does the work.
+#
+# Build and try it here:
+#   flatpak-builder --user --install --install-deps-from=flathub --force-clean build/flatpak \
+#       packaging/flatpak/io.github.aelnagish.Fotohaus.yml
+#   flatpak run io.github.aelnagish.Fotohaus
+# For the Flathub submission, make_submission.py writes this manifest with the release tag as source.
+id: io.github.aelnagish.Fotohaus
+runtime: org.freedesktop.Platform
+# 25.08 has Python 3.13, the newest that PySide6 6.9 (pinned in constraints.txt) supports
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: fotohaus
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # sound of videos, slideshows and movies
+  - --socket=pulseaudio
+  # printing
+  - --socket=cups
+  # map tiles, place search and the optional search model (see PRIVACY.md); nothing is uploaded
+  - --share=network
+  # Fotohaus organizes the photo folders that are already on the computer, wherever they are, and
+  # writes captions, tags and edits next to the photos. Cameras, cards and external drives:
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+modules:
+  # Qt's network library uses Kerberos (libgssapi_krb5), which the runtime doesn't include
+  - name: krb5
+    subdir: src
+    config-opts:
+      - --localstatedir=/var/lib
+      - --sbindir=${FLATPAK_DEST}/bin
+      - --disable-rpath
+      - --disable-static
+    cleanup:
+      - /bin
+      - /include
+      - /lib/pkgconfig
+      - /lib/krb5
+      - /share/et
+      - /share/examples
+      - /share/man
+      - /share/locale
+      - /var
+    sources:
+      - type: archive
+        url: https://kerberos.org/dist/krb5/1.22/krb5-1.22.3.tar.gz
+        sha256: fe90af8441ad9fa9b064b8e53077cefb782a96f8a68276b031dc54af1789ff0b
+  - name: fotohaus
+    buildsystem: simple
+    # the wheels' libraries stay exactly as their projects released them, as in the AppImage
+    build-options:
+      strip: false
+      no-debuginfo: true
+    build-commands:
+      - python3 packaging/flatpak/install.py
+    sources:
+      - type: dir
+        path: ../..
+        skip: [.git, .github, build, .flatpak-builder, docs, tests]
+      - python-wheels.json

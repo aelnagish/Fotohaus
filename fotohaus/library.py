@@ -1213,8 +1213,37 @@ def _trash(path: str) -> bool:
     return _trash_to(path)[0]
 
 
+_flatpak_trash_checked = False
+
+
+def _use_desktop_trash_in_flatpak() -> None:
+    """Inside Flatpak the app's data folder is private (~/.var/app/<id>/data), and Qt would put deleted
+    photos into a Trash folder there, where the desktop's Trash never shows them. Point that folder at
+    the real Trash (~/.local/share/Trash) once, so deleted photos turn up in the desktop's Trash."""
+    global _flatpak_trash_checked
+    if _flatpak_trash_checked or not os.environ.get("FLATPAK_ID"):
+        return
+    _flatpak_trash_checked = True
+    try:
+        private = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "Trash"
+        real = Path.home() / ".local" / "share" / "Trash"
+        if private == real or private.is_symlink():
+            return
+        if private.exists():
+            if any(private.rglob("*")):
+                return                      # something is in there already: leave it alone
+            shutil.rmtree(private)
+        for sub in ("files", "info"):
+            (real / sub).mkdir(parents=True, exist_ok=True)
+        private.parent.mkdir(parents=True, exist_ok=True)
+        private.symlink_to(real, target_is_directory=True)
+    except OSError:
+        pass
+
+
 def _trash_to(path: str) -> tuple[bool, str | None]:
     """Move a file to the Trash. Returns (moved, where it is now in the Trash, if known)."""
+    _use_desktop_trash_in_flatpak()
     try:
         from PySide6.QtCore import QFile
         f = QFile(path)
