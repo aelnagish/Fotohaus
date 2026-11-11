@@ -8,3 +8,4 @@ dist/
 fotohaus/models/clip*/
 _to_delete/
 .ruff_cache/
+.flatpak-builder/

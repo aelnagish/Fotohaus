@@ -563,6 +563,11 @@ class OptionsDialog(QDialog):
             self.tabs.setCurrentIndex(i)
 
     def _apply_viewer_linux(self):
+        if macos.FLATPAK_ID:
+            QMessageBox.information(self, "Photo Viewer", "Fotohaus is already in \"Open With\". In your "
+                                    "file manager, right-click a photo, choose Open With, pick Fotohaus "
+                                    "and make it the default.")
+            return
         ok = macos.install_linux_desktop_entry(make_default=True)
         QMessageBox.information(self, "Photo Viewer", "Done. Double-clicking photos and videos now opens "
                                 "Fotohaus's Photo Viewer." if ok else

@@ -47,8 +47,10 @@ def main(argv=None) -> int:
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName(APP_NAME)
     if sys.platform.startswith("linux"):
-        QGuiApplication.setDesktopFileName("fotohaus")   # Wayland: match fotohaus.desktop for the icon
-    if sys.platform == "win32":
+        from .macos import LINUX_DESKTOP_ID
+        QGuiApplication.setDesktopFileName(LINUX_DESKTOP_ID)   # Wayland: match the .desktop file for the icon
+    from .macos import is_store_package
+    if sys.platform == "win32" and not is_store_package():   # the Store package has its own identity
         try:   # group taskbar buttons under the Start menu shortcut's icon, not Python's
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Fotohaus.Fotohaus")
