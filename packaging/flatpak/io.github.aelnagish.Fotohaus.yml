@@ -35,6 +35,10 @@ finish-args:
 modules:
   - name: fotohaus
     buildsystem: simple
+    # the wheels' libraries stay exactly as their projects released them, as in the AppImage
+    build-options:
+      strip: false
+      no-debuginfo: true
     build-commands:
       - python3 packaging/flatpak/install.py
     sources:

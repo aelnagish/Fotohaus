@@ -152,7 +152,7 @@ jobs:
       - name: Flatpak tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder appstream desktop-file-utils
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils appstream desktop-file-utils
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0    # lets Flatpak's sandbox start on the runner
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
       - name: Check the menu entry and the store description
