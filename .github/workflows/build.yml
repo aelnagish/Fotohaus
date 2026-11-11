@@ -165,6 +165,11 @@ jobs:
           flatpak-builder --user --install --install-deps-from=flathub --force-clean \
             --state-dir="$RUNNER_TEMP/flatpak-state" --repo="$RUNNER_TEMP/flatpak-repo" \
             "$RUNNER_TEMP/flatpak-build" packaging/flatpak/io.github.aelnagish.Fotohaus.yml
+      - name: Libraries the runtime doesn't have (for information; optional Qt plugins may list some)
+        run: |
+          flatpak run --command=sh io.github.aelnagish.Fotohaus -c \
+            'find /app/lib -name "*.so*" -type f | while read -r f; do ldd "$f" 2>/dev/null | grep "not found" | sed "s|^|$f:|"; done | sort -u' | tee missing.txt
+          echo "$(cut -d: -f2 missing.txt | sort -u | wc -l) different libraries not found"
       - name: Smoke test (starts the app headless and quits)
         run: |
           flatpak run --env=QT_QPA_PLATFORM=offscreen --env=FOTOHAUS_AUTOQUIT_MS=4000 io.github.aelnagish.Fotohaus | tee smoke.txt

@@ -33,6 +33,28 @@ finish-args:
   - --filesystem=/run/media
   - --filesystem=/mnt
 modules:
+  # Qt's network library uses Kerberos (libgssapi_krb5), which the runtime doesn't include
+  - name: krb5
+    subdir: src
+    config-opts:
+      - --localstatedir=/var/lib
+      - --sbindir=${FLATPAK_DEST}/bin
+      - --disable-rpath
+      - --disable-static
+    cleanup:
+      - /bin
+      - /include
+      - /lib/pkgconfig
+      - /lib/krb5
+      - /share/et
+      - /share/examples
+      - /share/man
+      - /share/locale
+      - /var
+    sources:
+      - type: archive
+        url: https://kerberos.org/dist/krb5/1.22/krb5-1.22.3.tar.gz
+        sha256: fe90af8441ad9fa9b064b8e53077cefb782a96f8a68276b031dc54af1789ff0b
   - name: fotohaus
     buildsystem: simple
     # the wheels' libraries stay exactly as their projects released them, as in the AppImage

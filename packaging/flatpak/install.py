@@ -28,9 +28,10 @@ REPO = "https://github.com/aelnagish/Fotohaus"
 SUMMARY = "Private photo organizer and viewer"
 
 LAUNCHER = """#!/bin/sh
-# Python finds Fotohaus and its libraries in /app; -s keeps packages from ~/.local out of it.
+# Python finds Fotohaus and its libraries in /app. -s keeps packages from ~/.local out of it, and -P
+# the folder the app was started from.
 unset PYTHONHOME PYTHONPATH
-exec python3 -s -B -m {module} "$@"
+exec python3 -s -P -B -m {module} "$@"
 """
 
 DESKTOP = """[Desktop Entry]
