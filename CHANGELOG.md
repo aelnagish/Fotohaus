@@ -1,13 +1,24 @@
 # Changelog
 
-## Unreleased
+## 1.0.2 — 2026-11-11
 
+- Fotohaus now also runs on Windows (installer) and Linux (AppImage), built and tested on GitHub
+  for every release
 - Photo Viewer: Delete now really deletes. Like Picasa, the photo (and its Live Photo video) goes
-  straight to the Mac's Trash, the next picture slides in, and a small bar offers **Undo** (or ⌘Z)
+  straight to the Trash (the Recycle Bin on Windows), the next picture slides in, and a small bar offers **Undo** (or ⌘Z / Ctrl+Z)
   for a few seconds. Before, library photos stayed in the folder and came back the next time the
   viewer opened, and the filmstrip kept showing them
 - Photo Viewer: no more plain system warning when deleting a photo outside the library
 - Photo Viewer: no error messages in the log when it closes while thumbnails are still loading
+- Photo Viewer: a photo opened while the viewer is already up now shows in that viewer, and ← and →
+  move through its folder. *Tools ▸ Options ▸ When a viewer is already open* can bring back a new
+  window for each photo
+- Groundwork for Windows and Linux:
+  - Only one Fotohaus runs per library: opening more photos from File Explorer or the file
+    manager hands them to the copy that is already open
+  - The Private collection is locked with Windows Hello on Windows, and with a Fotohaus password
+    wherever Touch ID or Windows Hello isn't available (before, it opened without asking off macOS)
+  - On Windows the library is kept in `%LOCALAPPDATA%\Fotohaus`
 
 ## 1.0.1 — 2026-10-28
 

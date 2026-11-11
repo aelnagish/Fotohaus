@@ -20,12 +20,6 @@ for a in _args:
         print(f"fotohaus: no such file or folder: {a}", file=sys.stderr)
 from .app import main  # noqa: E402
 rc = main([sys.argv[0]] + paths)
-# Leave without Python's interpreter teardown, exactly like the app bundle does: PySide deletes the
-# remaining Qt objects in an arbitrary order at teardown, which can crash ("Python quit unexpectedly")
-# after every window has already closed. Everything is saved by now (the database commits each change).
-try:
-    sys.stdout.flush()
-    sys.stderr.flush()
-except Exception:
-    pass
-os._exit(int(rc or 0))
+# Leave without Python's interpreter teardown, exactly like the app bundle does (see hard_exit).
+from . import hard_exit  # noqa: E402
+hard_exit(int(rc or 0))

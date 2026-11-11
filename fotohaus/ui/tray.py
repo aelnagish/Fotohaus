@@ -6,6 +6,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListView, QListWidget, QListWidgetItem, QProgressBar, QSlider,
                                QToolButton, QVBoxLayout, QWidget)
 
+from .. import macos
 from . import theme
 
 ACTIONS = {"share": ("share", "Share"), "email": ("mail", "Email"), "print": ("print", "Print"),
@@ -58,14 +59,14 @@ class PhotoTray(QWidget):
             b.setAutoRaise(True)
             b.clicked.connect(cb)
             return b
-        col.addWidget(small("hold", "Hold selection in the Photo Tray (⌘K)", self.hold))
+        col.addWidget(small("hold", macos.keys("Hold selection in the Photo Tray (⌘K)"), self.hold))
         col.addWidget(small("close", "Clear the Photo Tray", self.clear))
         col.addWidget(small("plus", "Add tray items to an album", self.add_to_album))
         h.addLayout(col)
         h.addSpacing(6)
-        for icon, tip, cb, color in (("star", "Star / unstar (⌘8)", lambda: self.star.emit(), theme.STAR),
-                                     ("rotate-left", "Rotate counterclockwise (⌘[)", lambda: self.rotate.emit(-1), None),
-                                     ("rotate-right", "Rotate clockwise (⌘])", lambda: self.rotate.emit(1), None)):
+        for icon, tip, cb, color in (("star", macos.keys("Star / unstar (⌘8)"), lambda: self.star.emit(), theme.STAR),
+                                     ("rotate-left", macos.keys("Rotate counterclockwise (⌘[)"), lambda: self.rotate.emit(-1), None),
+                                     ("rotate-right", macos.keys("Rotate clockwise (⌘])"), lambda: self.rotate.emit(1), None)):
             b = small(icon, tip, cb, color)
             b.setIconSize(QSize(20, 20))
             h.addWidget(b)

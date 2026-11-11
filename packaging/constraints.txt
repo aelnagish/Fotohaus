@@ -1,0 +1,9 @@
+# Versions Fotohaus ships with. The Windows and Linux builds install with these pins, and the GitHub
+# tests use them too, so the tests check what users get. Keep them the same as REQUIREMENTS in
+# build_mac_app.py: THIRD_PARTY_NOTICES.md and the GPL source archive name the exact FFmpeg/x264/x265
+# versions inside av, opencv-python-headless and pillow-heif.
+PySide6-Essentials==6.9.3
+PySide6-Addons==6.9.3
+av==19.0.1
+pillow-heif==1.8.1
+opencv-python-headless==5.0.0.93

@@ -90,10 +90,18 @@ def _blend(a: Image.Image, b: Image.Image, t: float, kind: str) -> Image.Image:
     return Image.blend(a, b, t)
 
 
-def _pick_codec(av):
+def _pick_codec(av, size=(320, 240), fps=25):
+    """The first H.264 encoder that actually opens. Apple's hardware encoder is listed on every Mac
+    but can fail to start (virtual machines, some older Macs), so each one is tried, not just looked up."""
+    from fractions import Fraction
     for name in ("h264_videotoolbox", "libx264", "h264", "mpeg4"):
         try:
-            av.codec.Codec(name, "w")
+            ctx = av.codec.CodecContext.create(name, "w")
+            ctx.width, ctx.height = size
+            ctx.pix_fmt = "yuv420p"
+            ctx.time_base = Fraction(1, max(1, int(fps)))
+            ctx.bit_rate = 2_000_000
+            ctx.open()
             return name
         except Exception:
             continue
@@ -104,7 +112,7 @@ def make_movie(rows, opts: MovieOptions, progress=None, should_stop=None) -> str
     import av
     size = (opts.size[0] // 2 * 2, opts.size[1] // 2 * 2)
     container = av.open(opts.out_path, mode="w")
-    codec = _pick_codec(av)
+    codec = _pick_codec(av, size, opts.fps)
     vs = container.add_stream(codec, rate=opts.fps)
     vs.width, vs.height = size
     vs.pix_fmt = "yuv420p"
