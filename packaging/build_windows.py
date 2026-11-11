@@ -154,7 +154,8 @@ APPX_MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
     <Resource Language="en-us"/>
   </Resources>
   <Applications>
-    <Application Id="Fotohaus" Executable="Fotohaus.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Fotohaus" Executable="Fotohaus.exe" EntryPoint="Windows.FullTrustApplication"
+      desktop4:SupportsMultipleInstances="true">
       <uap:VisualElements DisplayName="Fotohaus" Description="Organize, find and edit your photos, privately"
         BackgroundColor="transparent" Square150x150Logo="Assets\\Square150x150Logo.png"
         Square44x44Logo="Assets\\Square44x44Logo.png">
@@ -178,15 +179,6 @@ APPX_MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
             </uap:SupportedFileTypes>
           </uap:FileTypeAssociation>
         </uap:Extension>
-      </Extensions>
-    </Application>
-    <!-- The command line tool: not in the Start menu, started by typing fotohaus-cli in a terminal. -->
-    <Application Id="FotohausCli" Executable="fotohaus-cli.exe" EntryPoint="Windows.FullTrustApplication"
-      desktop4:Subsystem="console" desktop4:SupportsMultipleInstances="true">
-      <uap:VisualElements DisplayName="Fotohaus command line" Description="Search and organize your Fotohaus library from a terminal"
-        BackgroundColor="transparent" Square150x150Logo="Assets\\Square150x150Logo.png"
-        Square44x44Logo="Assets\\Square44x44Logo.png" AppListEntry="none"/>
-      <Extensions>
         <uap5:Extension Category="windows.appExecutionAlias" Executable="fotohaus-cli.exe"
           EntryPoint="Windows.FullTrustApplication">
           <uap5:AppExecutionAlias desktop4:Subsystem="console">
