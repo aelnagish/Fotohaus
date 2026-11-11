@@ -14,14 +14,14 @@ body:
     attributes:
       label: Fotohaus version
       description: Help ▸ About Fotohaus
-      placeholder: "1.0.0"
+      placeholder: "1.0.3"
     validations:
       required: true
   - type: input
     id: macos
     attributes:
       label: macOS version and Mac
-      placeholder: "macOS 15.5, MacBook Air M2"
+      placeholder: "macOS 15.5 on a MacBook Air M2, Windows 11, Ubuntu 24.04"
     validations:
       required: true
   - type: textarea

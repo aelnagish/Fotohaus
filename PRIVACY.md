@@ -24,6 +24,8 @@ Fotohaus only goes online in these three cases:
    Hugging Face's privacy policy: https://huggingface.co/privacy
 
 Sharing and email go through the apps you pick, such as your mail program, and follow their
-policies.
+policies. The Feedback button only opens a new email in your mail program, with the Fotohaus
+version and your system's name filled in; nothing is sent until you send it. The Coffee button
+opens buymeacoffee.com in your web browser.
 
 Questions: https://github.com/aelnagish/Fotohaus/issues
