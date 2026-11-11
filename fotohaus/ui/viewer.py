@@ -56,7 +56,13 @@ def live_partner(path: str) -> str | None:
     stem = os.path.splitext(path)[0]
     for ext in (".MOV", ".mov"):
         if os.path.exists(stem + ext):
-            return stem + ext
+            # On case-insensitive disks (the Mac and Windows default) both spellings "exist": return the
+            # name actually on disk, which is the one the library knows the video by.
+            folder, want = os.path.split(stem + ext)
+            try:
+                return os.path.join(folder, next(n for n in os.listdir(folder) if n.lower() == want.lower()))
+            except (OSError, StopIteration):
+                return stem + ext
     return None
 
 
