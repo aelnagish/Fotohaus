@@ -141,16 +141,21 @@ Flathub builds from a tagged release, so the first release that contains this fo
    gh pr create --repo flathub/flathub --base new-pr --title "Add io.github.aelnagish.Fotohaus"
    ```
 
-4. **Answer the reviewers.** Things they are likely to ask about:
+4. **Answer the reviewers.** Flathub's checker (`flatpak-builder-lint`, run by the workflow for
+   information) passes the manifest with one remark, and reviewers may ask about two more things:
+   - **"A newer runtime, 26.08, is available"** (a warning, not an error). 25.08 is supported until
+     August 2027 and has Python 3.13, the newest that the pinned PySide6 6.9 runs on. Moving to
+     26.08 means a newer PySide6 in `constraints.txt` first, for all four builds.
    - **`--filesystem=home` and the drive folders.** Fotohaus organizes the folders that are already
      on the computer and writes `.picasa.ini` files, edits and tags next to the photos, so it can't
-     work through the file chooser alone. Flathub's checker reports this permission until a
-     reviewer grants an exception; say the above in the pull request.
+     work through the file chooser alone.
    - **Ready-made wheels** instead of building Qt, FFmpeg and OpenCV from source. They are the
      projects' own releases from PyPI, pinned by checksum; `packaging/THIRD_PARTY_NOTICES.md` lists
-     them and the GPL source archive is attached to every release.
-   - **Screenshots.** The description uses `docs/*.jpg` from the release tag. Screenshots taken on
-     Linux are preferred; replace the files in `docs/` or point `install.py` at new ones.
+     them and the GPL source archive is attached to every release. Kerberos, which Qt's network
+     library needs and the runtime lacks, is built from source.
+
+   The store description uses the screenshots in `docs/` at the release tag. Screenshots taken on
+   Linux are preferred; replace the files in `docs/` or point `install.py` at new ones.
 5. After approval Flathub creates `flathub/io.github.aelnagish.Fotohaus` and invites you to it.
    Log in at <https://flathub.org> with GitHub to get the *verified* badge (the `io.github.aelnagish`
    ID is verified through the GitHub account).
