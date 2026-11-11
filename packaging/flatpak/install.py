@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib
 import os
 import re
 import shutil
@@ -213,6 +214,10 @@ def install(app: Path) -> None:
         raise SystemExit(f"expected the libraries in {site}")
     sys.path.insert(0, str(SRC / "_tools"))
     sys.path.insert(0, str(site))                               # pillow, for the icons
+    # Python looked into /app's library folder when it started, before anything was in it, and
+    # remembers that it was missing: make it look again
+    sys.path_importer_cache.clear()
+    importlib.invalidate_caches()
     import _portable as P
     P.prune_site(site)
     P.prune_qt(site, "linux")
