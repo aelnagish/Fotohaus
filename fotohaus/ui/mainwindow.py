@@ -1963,16 +1963,14 @@ class MainWindow(QMainWindow):
     def about(self):
         QMessageBox.about(self, f"About {APP_NAME}", (
             f"<h3>{APP_NAME} {__version__}</h3>"
-            "<p>A private, on-device photo organizer, compatible with Picasa's "
-            "<code>.picasa.ini</code> metadata.</p>"
-            "<p>Picasa is a trademark of Google LLC. Fotohaus is an independent project.</p>"
-            "<p>Map data © OpenStreetMap contributors. Place names © GeoNames (geonames.org), CC BY 4.0. "
-            "Face models from OpenCV Zoo. "
-            "See the Licenses folder that comes with the app for third-party licenses.</p>"
+            "<p>A private, on-device photo viewer and organizer.</p>"
             "<p>Copyright © 2026 Abdullah Yusuf. Fotohaus is free software: you can redistribute it "
             "and/or modify it under the terms of the GNU General Public License, version 3 or (at your "
-            "option) any later version. It comes with ABSOLUTELY NO WARRANTY. Source code: "
+            "option) any later version. It comes with ABSOLUTELY NO WARRANTY. See the "
+            '<a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL</a> for details. Source code: '
             '<a href="https://github.com/aelnagish/fotohaus">github.com/aelnagish/fotohaus</a></p>'
+            "<p>Place names © GeoNames (geonames.org), CC BY 4.0. Fotohaus includes third-party "
+            "software; see the Licenses folder that comes with the app for details.</p>"
             f'<p>Enjoying {APP_NAME}? <a href="{SUPPORT_URL}">☕ Buy me a coffee</a></p>'))
 
     # ================================================================== window state
