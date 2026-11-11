@@ -268,6 +268,7 @@ def stylesheet() -> str:
     QPushButton#Effect:hover, QToolButton:hover {{ background: {chip_bg}; }}
     QPushButton#Effect:pressed, QToolButton:pressed {{ background: {border}; }}
     QToolButton:checked {{ background: {person_bg}; border-color: {ACCENT.name()}; }}
+    QToolButton::menu-indicator {{ image: none; width: 0px; }}
     QPushButton#Effect:disabled, QToolButton:disabled {{ color: {sec}; }}
     QTabWidget#EditTabs::pane {{ border: none; }}
     """
