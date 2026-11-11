@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import sys
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -31,6 +32,13 @@ class Sidebar(QTreeWidget):
         super().__init__(parent)
         self.lib = lib
         self.setObjectName("Sidebar")
+        if sys.platform == "win32":
+            # Windows' own style paints every row's background after drawRow's rounded highlight,
+            # which hid the highlight and left the selected row's white text on a white background
+            from PySide6.QtWidgets import QStyleFactory
+            self._row_style = QStyleFactory.create("Fusion")
+            if self._row_style is not None:
+                self.setStyle(self._row_style)
         self.setHeaderHidden(True)
         self.setIndentation(12)
         self.setRootIsDecorated(False)
